@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chain Lens — Bitcoin Transaction Autopsy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=Syne:wght@400;600;800&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #080a0c;
+  --bg2:      #0d1117;
+  --bg3:      #111820;
+  --border:   #1e2d3d;
+  --border2:  #2a3f56;
+  --amber:    #f5a623;
+  --amber2:   #ffd280;
+  --amber-dim:#7a5210;
+  --green:    #00e5a0;
+  --green2:   #00b87a;
+  --green-dim:#003d2a;
+  --red:      #ff4d6a;
+  --red-dim:  #4a0f1a;
+  --blue:     #38b6ff;
+  --blue-dim: #0a2540;
+  --purple:   #a78bfa;
+  --text:     #c8d8e8;
+  --text2:    #6b8aaa;
+  --text3:    #3a5570;
+  --mono:     'Syne Mono', monospace;
+  --sans:     'Syne', sans-serif;
+  --data:     'DM Mono', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Grain overlay ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 0.4;
+}
+
+/* ── Header ── */
+header {
+  border-bottom: 1px solid var(--border);
+  padding: 18px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(8,10,12,0.92);
+  backdrop-filter: blur(12px);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-icon {
+  width: 32px; height: 32px;
+  background: var(--amber);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  animation: pulse-amber 3s ease-in-out infinite;
+}
+
+@keyframes pulse-amber {
+  0%,100% { box-shadow: 0 0 0 0 rgba(245,166,35,0.4); }
+  50%      { box-shadow: 0 0 0 8px rgba(245,166,35,0); }
+}
+
+.logo-text { font-family: var(--mono); font-size: 18px; color: var(--amber); letter-spacing: 0.05em; }
+.logo-sub  { font-size: 11px; color: var(--text3); font-family: var(--data); letter-spacing: 0.1em; text-transform: uppercase; }
+
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 8px var(--green);
+  animation: blink 2s step-end infinite;
+}
+@keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+/* ── Layout ── */
+.main { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+
+/* ── Input zone ── */
+.input-zone {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 32px;
+  animation: fadeUp 0.5s ease;
+}
+
+@keyframes fadeUp {
+  from { opacity:0; transform: translateY(16px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+
+.panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  transition: border-color 0.2s;
+}
+.panel:hover { border-color: var(--border2); }
+
+.panel-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--amber);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.panel-title::before {
+  content: '';
+  display: inline-block;
+  width: 4px; height: 4px;
+  background: var(--amber);
+  border-radius: 50%;
+}
+
+textarea {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--data);
+  font-size: 12px;
+  padding: 12px;
+  resize: vertical;
+  min-height: 140px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  line-height: 1.6;
+}
+textarea:focus {
+  border-color: var(--amber-dim);
+  box-shadow: 0 0 0 2px rgba(245,166,35,0.1);
+}
+textarea::placeholder { color: var(--text3); }
+
+.btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+
+.btn {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  padding: 9px 20px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-transform: uppercase;
+}
+.btn-primary {
+  background: var(--amber);
+  color: #000;
+  font-weight: 600;
+}
+.btn-primary:hover { background: var(--amber2); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(245,166,35,0.3); }
+.btn-primary:active { transform: translateY(0); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text2);
+  border: 1px solid var(--border2);
+}
+.btn-ghost:hover { border-color: var(--text2); color: var(--text); }
+
+.btn-danger {
+  background: transparent;
+  color: var(--red);
+  border: 1px solid var(--red-dim);
+}
+.btn-danger:hover { background: var(--red-dim); }
+
+.file-upload-area {
+  border: 1px dashed var(--border2);
+  border-radius: 6px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 12px;
+}
+.file-upload-area:hover { border-color: var(--amber-dim); background: rgba(245,166,35,0.03); }
+.file-upload-area.dragover { border-color: var(--amber); background: rgba(245,166,35,0.06); }
+
+.file-row {
+  display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.file-chip {
+  font-family: var(--data);
+  font-size: 11px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  padding: 4px 10px;
+  color: var(--text2);
+}
+.file-chip.ready { border-color: var(--green-dim); color: var(--green); }
+
+/* ── Loading ── */
+.loading {
+  display: none;
+  text-align: center;
+  padding: 60px;
+}
+.loading.show { display: block; }
+.loader {
+  width: 40px; height: 40px;
+  border: 2px solid var(--border2);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-family: var(--mono); color: var(--text2); font-size: 13px; letter-spacing: 0.1em; }
+
+/* ── Error banner ── */
+.error-banner {
+  display: none;
+  background: var(--red-dim);
+  border: 1px solid var(--red);
+  border-radius: 6px;
+  padding: 14px 18px;
+  font-family: var(--data);
+  font-size: 13px;
+  color: var(--red);
+  margin-bottom: 24px;
+}
+.error-banner.show { display: block; }
+
+/* ── Results ── */
+#results { display: none; animation: fadeUp 0.6s ease; }
+#results.show { display: block; }
+
+/* ── Story bar ── */
+.story-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.story-step {
+  flex: 1;
+  padding: 18px 20px;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.2s;
+  position: relative;
+}
+.story-step:last-child { border-right: none; }
+.story-step:hover { background: rgba(245,166,35,0.04); }
+.story-step.active { background: rgba(245,166,35,0.07); }
+.story-step.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--amber);
+}
+
+.step-num {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.step-label {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ── Sections ── */
+.section { margin-bottom: 28px; }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--amber);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title::before {
+  content: '//';
+  color: var(--text3);
+}
+
+/* ── Summary cards ── */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  transition: border-color 0.2s, transform 0.2s;
+  animation: fadeUp 0.5s ease both;
+}
+.stat-card:nth-child(1) { animation-delay: 0.05s; }
+.stat-card:nth-child(2) { animation-delay: 0.1s; }
+.stat-card:nth-child(3) { animation-delay: 0.15s; }
+.stat-card:nth-child(4) { animation-delay: 0.2s; }
+.stat-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+
+.stat-label {
+  font-family: var(--data);
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.stat-value {
+  font-family: var(--mono);
+  font-size: 22px;
+  color: var(--amber);
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.stat-sub {
+  font-family: var(--data);
+  font-size: 11px;
+  color: var(--text2);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+.badge-green { background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,229,160,0.2); }
+.badge-amber { background: rgba(245,166,35,0.12); color: var(--amber); border: 1px solid rgba(245,166,35,0.2); }
+.badge-red   { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,77,106,0.2); }
+.badge-blue  { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(56,182,255,0.2); }
+.badge-gray  { background: rgba(255,255,255,0.04); color: var(--text2); border: 1px solid var(--border); }
+.badge-purple{ background: rgba(167,139,250,0.1); color: var(--purple); border: 1px solid rgba(167,139,250,0.2); }
+
+/* ── TXID display ── */
+.txid-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin-bottom: 28px;
+  font-family: var(--data);
+  font-size: 13px;
+}
+.txid-label { color: var(--text3); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px; }
+.txid-val   { color: var(--text2); word-break: break-all; line-height: 1.6; }
+.txid-val span { color: var(--amber); }
+.txid-row   { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.txid-badges{ display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+/* ── Flow diagram ── */
+.flow-container {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 32px 24px;
+  margin-bottom: 28px;
+  position: relative;
+  overflow: hidden;
+}
+
+.flow-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--amber);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+
+.flow-layout {
+  display: grid;
+  grid-template-columns: 1fr 80px 1fr;
+  gap: 0;
+  align-items: center;
+}
+
+.flow-col-title {
+  font-family: var(--data);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.flow-inputs, .flow-outputs { display: flex; flex-direction: column; gap: 10px; }
+
+.flow-node {
+  background: var(--bg3);
+  border-radius: 6px;
+  padding: 12px 16px;
+  border-left: 3px solid var(--blue);
+  animation: slideIn 0.4s ease both;
+}
+.flow-node.output { border-left-color: var(--green); }
+.flow-node.fee-node { border-left-color: var(--red); opacity: 0.7; }
+.flow-node.opreturn { border-left-color: var(--text3); }
+
+@keyframes slideIn {
+  from { opacity:0; transform: translateX(-10px); }
+  to   { opacity:1; transform: translateX(0); }
+}
+
+.flow-node-label {
+  font-family: var(--data);
+  font-size: 10px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+}
+.flow-node-type {
+  font-family: var(--mono);
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.flow-node-addr {
+  font-family: var(--data);
+  font-size: 11px;
+  color: var(--text2);
+  word-break: break-all;
+}
+.flow-node-val {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--amber);
+  margin-top: 6px;
+}
+
+.flow-arrows {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.flow-svg {
+  width: 80px;
+  overflow: visible;
+}
+
+/* ── Fee bar ── */
+.fee-breakdown {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 28px;
+}
+
+.fee-bar-wrap { margin: 20px 0 12px; }
+.fee-bar-track {
+  height: 28px;
+  background: var(--bg3);
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+}
+.fee-bar-out {
+  background: linear-gradient(90deg, var(--green2), var(--green));
+  height: 100%;
+  transition: width 1s cubic-bezier(0.4,0,0.2,1);
+  display: flex; align-items: center;
+  padding: 0 10px;
+}
+.fee-bar-fee {
+  background: linear-gradient(90deg, var(--amber-dim), var(--amber));
+  height: 100%;
+  transition: width 1s cubic-bezier(0.4,0,0.2,1);
+  display: flex; align-items: center;
+  padding: 0 8px;
+}
+.fee-bar-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #000;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.fee-legend { display: flex; gap: 20px; flex-wrap: wrap; }
+.fee-legend-item { display: flex; align-items: center; gap: 8px; font-family: var(--data); font-size: 12px; color: var(--text2); }
+.fee-legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+/* ── Rate meter ── */
+.rate-meter { margin-top: 20px; }
+.rate-track {
+  height: 8px;
+  background: var(--bg3);
+  border-radius: 4px;
+  position: relative;
+  overflow: visible;
+  margin: 8px 0 16px;
+}
+.rate-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 1s ease;
+}
+.rate-labels { display: flex; justify-content: space-between; font-family: var(--data); font-size: 10px; color: var(--text3); }
+.rate-pointer {
+  position: absolute;
+  top: -4px;
+  width: 2px; height: 16px;
+  background: var(--amber);
+  transform: translateX(-50%);
+}
+
+/* ── Inputs / Outputs grid ── */
+.io-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+
+.io-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  animation: fadeUp 0.5s ease both;
+}
+
+.io-card-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.io-card-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.io-items { padding: 0; }
+.io-item {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.io-item:last-child { border-bottom: none; }
+.io-item:hover { background: rgba(255,255,255,0.02); }
+
+.io-item-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.io-item-num { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+.io-item-val { font-family: var(--mono); font-size: 14px; color: var(--amber); }
+
+.io-item-addr {
+  font-family: var(--data);
+  font-size: 11px;
+  color: var(--text2);
+  word-break: break-all;
+  margin-bottom: 8px;
+}
+.io-item-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+/* ── Witness expand ── */
+.witness-toggle {
+  font-family: var(--data);
+  font-size: 11px;
+  color: var(--text3);
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  text-decoration: underline dotted;
+}
+.witness-toggle:hover { color: var(--text2); }
+.witness-data {
+  display: none;
+  margin-top: 8px;
+  background: var(--bg3);
+  border-radius: 4px;
+  padding: 10px;
+  font-family: var(--data);
+  font-size: 11px;
+  color: var(--text2);
+  word-break: break-all;
+  line-height: 1.8;
+}
+.witness-data.open { display: block; }
+
+/* ── Tech details ── */
+.tech-section {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 28px;
+  overflow: hidden;
+}
+.tech-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  color: var(--text2);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  transition: background 0.15s;
+  text-align: left;
+}
+.tech-toggle:hover { background: rgba(255,255,255,0.02); }
+.tech-toggle-arrow { transition: transform 0.2s; }
+.tech-toggle.open .tech-toggle-arrow { transform: rotate(180deg); }
+.tech-body { display: none; padding: 20px; border-top: 1px solid var(--border); }
+.tech-body.open { display: block; }
+
+.hex-block {
+  background: var(--bg3);
+  border-radius: 4px;
+  padding: 14px;
+  font-family: var(--data);
+  font-size: 11px;
+  color: var(--text2);
+  word-break: break-all;
+  line-height: 2;
+  margin-bottom: 10px;
+}
+
+.kv-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+.kv-table tr { border-bottom: 1px solid var(--border); }
+.kv-table tr:last-child { border-bottom: none; }
+.kv-table td { padding: 8px 12px; font-family: var(--data); font-size: 12px; }
+.kv-table td:first-child { color: var(--text3); width: 40%; }
+.kv-table td:last-child  { color: var(--text); word-break: break-all; }
+
+/* ── Warnings ── */
+.warnings-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+
+.warning-card {
+  background: var(--red-dim);
+  border: 1px solid rgba(255,77,106,0.3);
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  animation: fadeUp 0.4s ease;
+}
+.warning-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+.warning-code { font-family: var(--mono); font-size: 13px; color: var(--red); font-weight: 600; margin-bottom: 4px; }
+.warning-msg  { font-family: var(--data); font-size: 12px; color: var(--text2); line-height: 1.6; }
+.warning-explain { font-family: var(--data); font-size: 12px; color: var(--text3); margin-top: 6px; font-style: italic; }
+
+/* ── Segwit savings ── */
+.segwit-vis {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 28px;
+}
+
+.weight-bars { display: flex; gap: 24px; align-items: flex-end; margin: 20px 0; }
+.weight-bar-wrap { flex: 1; text-align: center; }
+.weight-bar {
+  background: var(--bg3);
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  margin-bottom: 8px;
+  transition: height 1s cubic-bezier(0.4,0,0.2,1);
+  overflow: hidden;
+}
+.weight-bar-fill {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  border-radius: 4px 4px 0 0;
+  transition: height 1s ease;
+}
+.weight-bar-label { font-family: var(--data); font-size: 11px; color: var(--text2); }
+.weight-bar-val   { font-family: var(--mono); font-size: 16px; color: var(--amber); margin-top: 4px; }
+.savings-arrow { font-size: 24px; color: var(--green); margin-bottom: 24px; }
+
+/* ── Block view ── */
+.block-header-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.block-hash {
+  font-family: var(--data);
+  font-size: 12px;
+  color: var(--text2);
+  word-break: break-all;
+  margin: 8px 0 16px;
+}
+.block-hash span { color: var(--amber); }
+
+.tx-list { margin-bottom: 28px; }
+.tx-row {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.tx-row:hover { border-color: var(--border2); }
+.tx-row-head {
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  gap: 12px;
+}
+.tx-row-txid { font-family: var(--data); font-size: 12px; color: var(--text2); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tx-row-fee  { font-family: var(--mono); font-size: 12px; color: var(--amber); white-space: nowrap; }
+.tx-row-body { display: none; border-top: 1px solid var(--border); padding: 16px 20px; }
+.tx-row-body.open { display: block; }
+
+/* ── Tooltip ── */
+[data-tip] { position: relative; cursor: help; border-bottom: 1px dotted var(--text3); }
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: var(--data);
+  font-size: 11px;
+  color: var(--text);
+  white-space: pre-wrap;
+  max-width: 240px;
+  min-width: 140px;
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 50;
+  line-height: 1.5;
+}
+[data-tip]:hover::after { opacity: 1; }
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .input-zone    { grid-template-columns: 1fr; }
+  .summary-grid  { grid-template-columns: 1fr 1fr; }
+  .io-grid       { grid-template-columns: 1fr; }
+  .flow-layout   { grid-template-columns: 1fr; }
+  .story-bar     { flex-direction: column; }
+}
+
+@media (max-width: 600px) {
+  .summary-grid  { grid-template-columns: 1fr; }
+  header { padding: 14px 16px; }
+  .main  { padding: 24px 14px; }
+}
+
+.divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+
+.plain-english {
+  background: linear-gradient(135deg, rgba(245,166,35,0.05), rgba(0,229,160,0.03));
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--amber);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin-bottom: 28px;
+  font-family: var(--data);
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text);
+}
+.plain-english strong { color: var(--amber); font-family: var(--sans); }
+.plain-english em     { color: var(--green); font-style: normal; font-family: var(--mono); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⛓</div>
+    <div>
+      <div class="logo-text">CHAIN&nbsp;LENS</div>
+      <div class="logo-sub">Bitcoin Transaction Autopsy</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="status-dot" id="statusDot"></div>
+    <span style="font-family:var(--data);font-size:11px;color:var(--text3)" id="statusLabel">connecting…</span>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- Input zone -->
+  <div class="input-zone">
+    <div class="panel">
+      <div class="panel-title">Transaction Fixture</div>
+      <textarea id="fixtureInput" placeholder='{"network":"mainnet","raw_tx":"0200...","prevouts":[...]}'></textarea>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="analyze()">⚡ Analyze</button>
+        <button class="btn btn-ghost" onclick="loadExample()">Load Example</button>
+        <button class="btn btn-danger" onclick="clearAll()">Clear</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Block Mode (optional)</div>
+      <div class="file-upload-area" id="dropZone" onclick="document.getElementById('blockFiles').click()">
+        <div style="font-family:var(--data);font-size:12px;color:var(--text3);margin-bottom:6px">
+          Drop blk*.dat, rev*.dat, xor.dat here
+        </div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:0.1em">OR CLICK TO BROWSE</div>
+      </div>
+      <input type="file" id="blockFiles" multiple accept=".dat" style="display:none" onchange="handleBlockFiles(this.files)">
+      <div class="file-row" id="fileChips"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="analyzeBlock()">🧱 Analyze Block</button>
+      </div>
+      <div style="font-family:var(--data);font-size:11px;color:var(--text3);margin-top:12px;line-height:1.6">
+        Upload all three files (blk*.dat, rev*.dat, xor.dat) then click Analyze Block
+      </div>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div class="error-banner" id="errorBanner"></div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="loader"></div>
+    <div class="loading-text">DECODING TRANSACTION…</div>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <!-- Story bar -->
+    <div class="story-bar" id="storyBar">
+      <div class="story-step active" data-step="0" onclick="scrollToSection('summary')">
+        <div class="step-num">01 — What happened</div>
+        <div class="step-label">Transaction Overview</div>
+      </div>
+      <div class="story-step" data-step="1" onclick="scrollToSection('flow')">
+        <div class="step-num">02 — Who paid whom</div>
+        <div class="step-label">Value Flow</div>
+      </div>
+      <div class="story-step" data-step="2" onclick="scrollToSection('cost')">
+        <div class="step-num">03 — What did it cost</div>
+        <div class="step-label">Fees & Size</div>
+      </div>
+      <div class="story-step" data-step="3" onclick="scrollToSection('risks')">
+        <div class="step-num">04 — Any risks?</div>
+        <div class="step-label">Warnings & Flags</div>
+      </div>
+    </div>
+
+    <!-- Rendered content injected here -->
+    <div id="renderTarget"></div>
+  </div>
+
+</div>
+
+<script>
+// ── Globals ──────────────────────────────────────────────────────────────────
+let blockFileMap = {};
+
+// ── Health check ─────────────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch('/api/health');
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('statusDot').style.background = 'var(--green)';
+      document.getElementById('statusDot').style.boxShadow = '0 0 8px var(--green)';
+      document.getElementById('statusLabel').textContent = 'system online';
+    }
+  } catch(e) {
+    document.getElementById('statusLabel').textContent = 'offline';
+    document.getElementById('statusDot').style.background = 'var(--red)';
+  }
+}
+checkHealth();
+
+// ── Example fixture ───────────────────────────────────────────────────────────
+const EXAMPLE = {
+  "network": "mainnet",
+  "raw_tx": "0200000001111111111111111111111111111111111111111111111111111111111111111100000000000000000002b00400000000000019a914010101010101010101010101010101010101010188ac0000000000000000096a08736f622d32303236",
+  "prevouts": [{"txid":"1111111111111111111111111111111111111111111111111111111111111111","vout":0,"value_sats":2000,"script_pubkey_hex":"76a914020202020202020202020202020202020202020288ac"}]
+};
+
+function loadExample() {
+  document.getElementById('fixtureInput').value = JSON.stringify(EXAMPLE, null, 2);
+}
+
+function clearAll() {
+  document.getElementById('fixtureInput').value = '';
+  document.getElementById('results').classList.remove('show');
+  document.getElementById('errorBanner').classList.remove('show');
+  blockFileMap = {};
+  document.getElementById('fileChips').innerHTML = '';
+}
+
+// ── Block file handling ───────────────────────────────────────────────────────
+function handleBlockFiles(files) {
+  for (const f of files) {
+    blockFileMap[f.name] = f;
+  }
+  renderFileChips();
+}
+
+function renderFileChips() {
+  const chip = document.getElementById('fileChips');
+  chip.innerHTML = '';
+  for (const name of Object.keys(blockFileMap)) {
+    const el = document.createElement('div');
+    el.className = 'file-chip ready';
+    el.textContent = '✓ ' + name;
+    chip.appendChild(el);
+  }
+}
+
+// Setup drag-drop
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('dragover');
+  handleBlockFiles(e.dataTransfer.files);
+});
+
+// ── Show/hide helpers ─────────────────────────────────────────────────────────
+function showLoading()  { document.getElementById('loading').classList.add('show'); }
+function hideLoading()  { document.getElementById('loading').classList.remove('show'); }
+function showError(msg) {
+  const el = document.getElementById('errorBanner');
+  el.textContent = '⚠ ' + msg;
+  el.classList.add('show');
+}
+function hideError()    { document.getElementById('errorBanner').classList.remove('show'); }
+function showResults()  { document.getElementById('results').classList.add('show'); }
+
+function scrollToSection(id) {
+  const el = document.getElementById('sec-' + id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Analyze transaction ───────────────────────────────────────────────────────
+async function analyze() {
+  hideError();
+  const raw = document.getElementById('fixtureInput').value.trim();
+  if (!raw) { showError('Paste a fixture JSON first.'); return; }
+
+  let payload;
+  try { payload = JSON.parse(raw); }
+  catch(e) { showError('Invalid JSON: ' + e.message); return; }
+
+  showLoading();
+  try {
+    const r = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await r.json();
+    hideLoading();
+    if (!data.ok) {
+      showError((data.error && data.error.message) || 'Analysis failed');
+      return;
+    }
+    renderTx(data);
+    showResults();
+  } catch(e) {
+    hideLoading();
+    showError('Network error: ' + e.message);
+  }
+}
+
+// ── Analyze block ─────────────────────────────────────────────────────────────
+async function analyzeBlock() {
+  hideError();
+  const names = Object.keys(blockFileMap);
+  if (names.length < 3) { showError('Upload all 3 files: blk*.dat, rev*.dat, xor.dat'); return; }
+
+  const fd = new FormData();
+  for (const [name, file] of Object.entries(blockFileMap)) {
+    fd.append(name, file, name);
+  }
+
+  showLoading();
+  try {
+    const r = await fetch('/api/analyze-block', { method: 'POST', body: fd });
+    const data = await r.json();
+    hideLoading();
+    if (!data.ok) {
+      showError((data.error && data.error.message) || 'Block analysis failed');
+      return;
+    }
+    renderBlock(data);
+    showResults();
+  } catch(e) {
+    hideLoading();
+    showError('Network error: ' + e.message);
+  }
+}
+
+// ── Formatters ────────────────────────────────────────────────────────────────
+function fmtSats(n) {
+  if (n === 0) return '<span style="color:var(--text3)">0 sats</span>';
+  if (n >= 100_000_000) {
+    return '<span style="color:var(--amber)">' + (n/1e8).toFixed(8) + ' BTC</span> <span style="color:var(--text3)">(' + n.toLocaleString() + ' sats)</span>';
+  }
+  return '<span style="color:var(--amber)">' + n.toLocaleString() + '</span> <span style="color:var(--text3)">sats</span>';
+}
+
+function fmtAddr(addr, type) {
+  if (!addr) return '<span style="color:var(--text3)">—</span>';
+  const colors = {
+    p2tr: 'var(--amber)', p2tr_keypath: 'var(--amber)', p2tr_scriptpath: 'var(--amber)',
+    p2wpkh: 'var(--green)', p2wsh: 'var(--green)',
+    p2sh: 'var(--purple)', 'p2sh-p2wpkh': 'var(--purple)', 'p2sh-p2wsh': 'var(--purple)',
+    p2pkh: 'var(--blue)'
+  };
+  const col = colors[type] || 'var(--text2)';
+  return '<span style="color:' + col + ';font-family:var(--data);word-break:break-all">' + addr + '</span>';
+}
+
+function scriptBadge(type) {
+  const map = {
+    p2pkh:          ['badge-blue',   'P2PKH'],
+    p2sh:           ['badge-purple', 'P2SH'],
+    p2wpkh:         ['badge-green',  'P2WPKH ⚡'],
+    p2wsh:          ['badge-green',  'P2WSH ⚡'],
+    p2tr:           ['badge-amber',  'P2TR ◆'],
+    p2tr_keypath:   ['badge-amber',  'P2TR Key ◆'],
+    p2tr_scriptpath:['badge-amber',  'P2TR Script'],
+    'p2sh-p2wpkh':  ['badge-purple', 'P2SH-P2WPKH'],
+    'p2sh-p2wsh':   ['badge-purple', 'P2SH-P2WSH'],
+    op_return:      ['badge-gray',   'OP_RETURN'],
+    unknown:        ['badge-red',    'UNKNOWN'],
+  };
+  const [cls, label] = map[type] || ['badge-gray', type];
+  return '<span class="badge ' + cls + '">' + label + '</span>';
+}
+
+function scriptTooltip(type) {
+  const tips = {
+    p2pkh:   'Pay-to-Public-Key-Hash.\nOldest address type (starts with 1).\nLarger and less efficient than newer types.',
+    p2sh:    'Pay-to-Script-Hash.\nAllows complex conditions like multisig.\nAddress starts with 3.',
+    p2wpkh:  'Pay-to-Witness-Public-Key-Hash.\nSegWit native — smaller, cheaper.\nAddress starts with bc1q.',
+    p2wsh:   'Pay-to-Witness-Script-Hash.\nSegWit version of P2SH — cheaper.\nStarts with bc1q.',
+    p2tr:    'Pay-to-Taproot (latest standard).\nMost private & efficient.\nAddress starts with bc1p.',
+    op_return:'Unspendable output used to\nembed arbitrary data on-chain.\nNo funds are locked here.',
+    unknown: 'Unrecognized script pattern.\nCould be non-standard or malformed.',
+  };
+  return tips[type] || '';
+}
+
+function warnExplain(code) {
+  const m = {
+    HIGH_FEE:             'The fee is unusually high — either over 1,000,000 sats or over 200 sat/vB. This may be a mistake or extremely urgent transaction.',
+    DUST_OUTPUT:          'An output is below 546 sats ("dust"). It costs more in fees to spend this output than it\'s worth. The network may reject it.',
+    RBF_SIGNALING:        'Replace-By-Fee: this transaction can be replaced with a higher-fee version before confirmation. It\'s not yet final in the mempool.',
+    UNKNOWN_OUTPUT_SCRIPT:'At least one output has a non-standard script. Most wallets won\'t be able to spend it.',
+  };
+  return m[code] || '';
+}
+
+// ── Plain-English story ───────────────────────────────────────────────────────
+function buildStory(d) {
+  const inCount  = d.vin.length;
+  const outCount = d.vout.length;
+  const fee      = d.fee_sats;
+  const rate     = d.fee_rate_sat_vb;
+  const isSegwit = d.segwit;
+  const rbf      = d.rbf_signaling;
+
+  let story = '';
+  story += 'This is a <strong>' + (isSegwit ? 'SegWit' : 'legacy') + ' Bitcoin transaction</strong> ';
+  story += 'that spends <strong>' + inCount + ' input' + (inCount>1?'s':'') + '</strong> ';
+  story += 'and creates <strong>' + outCount + ' output' + (outCount>1?'s':'') + '</strong>. ';
+
+  const totalIn  = d.total_input_sats;
+  const totalOut = d.total_output_sats;
+  story += 'A total of <em>' + totalIn.toLocaleString() + ' sats</em> came in, ';
+  story += '<em>' + totalOut.toLocaleString() + ' sats</em> went out, ';
+  story += 'and <em>' + fee.toLocaleString() + ' sats</em> were paid as a fee to miners ';
+  story += '(≈' + rate + ' sat per virtual byte). ';
+
+  if (rbf) story += '⚠ This transaction <strong>signals RBF</strong> — it can be replaced with a higher-fee version before it confirms. ';
+  if (d.locktime > 0) story += 'It has an <strong>absolute timelock</strong> of ' + d.locktime + ' (' + d.locktime_type + '). ';
+
+  return story;
+}
+
+// ── Render full transaction ───────────────────────────────────────────────────
+function renderTx(d) {
+  const rt = document.getElementById('renderTarget');
+
+  // 1. Plain-English summary
+  let html = '';
+  html += '<div id="sec-summary" class="plain-english">' + buildStory(d) + '</div>';
+
+  // 2. Stat cards
+  html += '<div class="summary-grid">';
+  html += statCard('Fee', fmtSats(d.fee_sats), d.fee_rate_sat_vb + ' sat/vB', '');
+  html += statCard('Size', d.vbytes + ' vB', d.weight + ' weight units', '');
+  html += statCard('Inputs', d.vin.length, d.total_input_sats.toLocaleString() + ' sats in', '');
+  html += statCard('Outputs', d.vout.length, d.total_output_sats.toLocaleString() + ' sats out', '');
+  html += '</div>';
+
+  // 3. TXID box
+  html += '<div class="txid-box">';
+  html += '<div class="txid-row">';
+  html += '<div style="flex:1">';
+  html += '<div class="txid-label">Transaction ID (TXID)</div>';
+  html += '<div class="txid-val"><span>' + d.txid.slice(0,32) + '</span>' + d.txid.slice(32) + '</div>';
+  if (d.wtxid) {
+    html += '<div class="txid-label" style="margin-top:10px">Witness TXID (WTXID)</div>';
+    html += '<div class="txid-val" style="color:var(--text3)">' + d.wtxid + '</div>';
+  }
+  html += '</div></div>';
+  html += '<div class="txid-badges">';
+  html += '<span class="badge ' + (d.segwit ? 'badge-green' : 'badge-gray') + '">' + (d.segwit ? '⚡ SegWit' : 'Legacy') + '</span>';
+  html += '<span class="badge badge-blue">' + d.network + '</span>';
+  html += '<span class="badge badge-gray">v' + d.version + '</span>';
+  if (d.rbf_signaling) html += '<span class="badge badge-red" data-tip="This tx can be replaced before confirmation">RBF</span>';
+  if (d.locktime > 0)  html += '<span class="badge badge-amber" data-tip="Tx locked until block/time: ' + d.locktime + '">⏳ Locktime</span>';
+  html += '</div>';
+  html += '</div>';
+
+  // 4. Flow diagram
+  html += '<div id="sec-flow" class="flow-container">';
+  html += '<div class="flow-title">// Value Flow Diagram</div>';
+  html += '<div style="display:flex;gap:24px;align-items:flex-start">';
+
+  // Inputs column
+  html += '<div style="flex:1">';
+  html += '<div class="flow-col-title">↙ Inputs</div>';
+  d.vin.forEach((inp, i) => {
+    const tip = scriptTooltip(inp.script_type);
+    const tipAttr = tip ? ' data-tip="' + tip.replace(/"/g, '&quot;') + '"' : '';
+    html += '<div class="flow-node" style="margin-bottom:10px;animation-delay:' + (i*0.07) + 's">';
+    html += '<div class="flow-node-label">Input #' + i + '</div>';
+    html += '<div class="flow-node-type"' + tipAttr + '>' + scriptBadge(inp.script_type) + '</div>';
+    if (inp.address) html += '<div class="flow-node-addr">' + inp.address + '</div>';
+    html += '<div class="flow-node-val">' + fmtSats(inp.prevout.value_sats) + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Arrow column
+  html += '<div style="display:flex;flex-direction:column;align-items:center;padding-top:36px;gap:4px">';
+  html += '<div style="font-size:24px;color:var(--amber)">→</div>';
+  html += '<div style="font-family:var(--data);font-size:10px;color:var(--text3);text-align:center;letter-spacing:0.08em">VALUE<br>FLOWS</div>';
+  html += '</div>';
+
+  // Outputs column
+  html += '<div style="flex:1">';
+  html += '<div class="flow-col-title">↗ Outputs</div>';
+  d.vout.forEach((out, i) => {
+    const isDust = out.value_sats < 546 && out.script_type !== 'op_return';
+    const tip = scriptTooltip(out.script_type);
+    const tipAttr = tip ? ' data-tip="' + tip.replace(/"/g, '&quot;') + '"' : '';
+    let cls = 'flow-node output';
+    if (out.script_type === 'op_return') cls += ' opreturn';
+    html += '<div class="' + cls + '" style="margin-bottom:10px;animation-delay:' + (i*0.07) + 's">';
+    html += '<div class="flow-node-label">Output #' + out.n + '</div>';
+    html += '<div class="flow-node-type"' + tipAttr + '>' + scriptBadge(out.script_type);
+    if (isDust) html += ' <span class="badge badge-red">DUST</span>';
+    html += '</div>';
+    if (out.address) html += '<div class="flow-node-addr">' + out.address + '</div>';
+    if (out.op_return_data_utf8) html += '<div class="flow-node-addr" style="color:var(--amber)">"' + out.op_return_data_utf8 + '"</div>';
+    html += '<div class="flow-node-val">' + fmtSats(out.value_sats) + '</div>';
+    html += '</div>';
+  });
+  // Fee as missing slice
+  html += '<div class="flow-node fee-node" style="margin-bottom:10px">';
+  html += '<div class="flow-node-label">⛏ Miner Fee</div>';
+  html += '<div class="flow-node-val" style="color:var(--amber)">' + fmtSats(d.fee_sats) + '</div>';
+  html += '<div style="font-family:var(--data);font-size:11px;color:var(--text3)">burned as transaction fee</div>';
+  html += '</div>';
+  html += '</div>';
+
+  html += '</div></div>'; // end flow
+
+  // 5. Fee breakdown section
+  html += '<div id="sec-cost" class="fee-breakdown">';
+  html += '<div class="section-title">// Fee & Cost Breakdown</div>';
+
+  const pct = d.total_input_sats > 0 ? (d.total_output_sats / d.total_input_sats * 100) : 0;
+  const feePct = 100 - pct;
+
+  html += '<div class="fee-bar-wrap">';
+  html += '<div style="display:flex;justify-content:space-between;font-family:var(--data);font-size:11px;color:var(--text3);margin-bottom:6px">';
+  html += '<span>Total Input: ' + d.total_input_sats.toLocaleString() + ' sats</span>';
+  html += '<span>' + feePct.toFixed(2) + '% fee</span>';
+  html += '</div>';
+  html += '<div class="fee-bar-track">';
+  html += '<div class="fee-bar-out" style="width:' + pct.toFixed(2) + '%"><span class="fee-bar-label">Output ' + pct.toFixed(1) + '%</span></div>';
+  html += '<div class="fee-bar-fee" style="width:' + feePct.toFixed(2) + '%"><span class="fee-bar-label">Fee</span></div>';
+  html += '</div></div>';
+
+  html += '<div class="fee-legend" style="margin-top:12px">';
+  html += '<div class="fee-legend-item"><div class="fee-legend-dot" style="background:var(--green)"></div>Sent to outputs: ' + d.total_output_sats.toLocaleString() + ' sats</div>';
+  html += '<div class="fee-legend-item"><div class="fee-legend-dot" style="background:var(--amber)"></div>Fee to miners: ' + d.fee_sats.toLocaleString() + ' sats</div>';
+  html += '</div>';
+
+  // Rate meter
+  const rate = d.fee_rate_sat_vb;
+  const rateCap = Math.min(rate, 200);
+  const rateColor = rate > 200 ? 'var(--red)' : rate > 50 ? 'var(--amber)' : rate > 10 ? 'var(--green2)' : 'var(--green)';
+  html += '<div class="rate-meter">';
+  html += '<div style="font-family:var(--data);font-size:11px;color:var(--text3);margin-bottom:4px">';
+  html += 'Fee Rate: <span style="color:' + rateColor + ';font-family:var(--mono)">' + rate + ' sat/vB</span>';
+  html += ' &nbsp;<span data-tip="Sat per virtual byte. Higher = confirms faster. Normal: 1–50 sat/vB. High: >100 sat/vB.">ⓘ</span>';
+  html += '</div>';
+  html += '<div class="rate-track">';
+  html += '<div class="rate-fill" style="width:' + (rateCap/200*100).toFixed(1) + '%;background:' + rateColor + '"></div>';
+  html += '<div class="rate-pointer" style="left:' + (rateCap/200*100).toFixed(1) + '%"></div>';
+  html += '</div>';
+  html += '<div class="rate-labels"><span>0</span><span>50</span><span>100</span><span>200+ sat/vB</span></div>';
+  html += '</div>';
+
+  // Size breakdown
+  html += '<div style="margin-top:20px;display:flex;gap:24px;flex-wrap:wrap">';
+  html += '<div style="font-family:var(--data);font-size:12px;color:var(--text2)">';
+  html += '<span data-tip="Total bytes of the raw tx">Size</span>: <strong style="color:var(--text)">' + d.size_bytes + ' bytes</strong></div>';
+  html += '<div style="font-family:var(--data);font-size:12px;color:var(--text2)">';
+  html += '<span data-tip="BIP141 weight units. Witness data costs less.">Weight</span>: <strong style="color:var(--text)">' + d.weight + ' WU</strong></div>';
+  html += '<div style="font-family:var(--data);font-size:12px;color:var(--text2)">';
+  html += '<span data-tip="Virtual bytes = weight / 4. Used to calculate fee.">vBytes</span>: <strong style="color:var(--text)">' + d.vbytes + ' vB</strong></div>';
+  html += '</div>';
+  html += '</div>'; // fee breakdown
+
+  // 6. SegWit savings (if segwit)
+  if (d.segwit && d.segwit_savings) {
+    const ss = d.segwit_savings;
+    const legacyH = 120;
+    const actualH = Math.round(legacyH * ss.weight_actual / ss.weight_if_legacy);
+    html += '<div class="segwit-vis">';
+    html += '<div class="section-title">// SegWit Weight Savings</div>';
+    html += '<div style="font-family:var(--data);font-size:12px;color:var(--text2);margin-top:8px;line-height:1.8">';
+    html += 'SegWit moves witness data (signatures) outside the main tx body. ';
+    html += 'Witness bytes cost <strong style="color:var(--green)">¼ the weight</strong> of regular bytes, ';
+    html += 'making the effective size smaller and the fee lower.<br>';
+    html += 'This transaction saves <strong style="color:var(--amber)">' + ss.savings_pct + '%</strong> vs a hypothetical legacy equivalent.';
+    html += '</div>';
+    html += '<div class="weight-bars" style="margin-top:24px">';
+    // Legacy bar
+    html += '<div class="weight-bar-wrap">';
+    html += '<div class="weight-bar" style="height:' + legacyH + 'px">';
+    html += '<div class="weight-bar-fill" style="background:var(--red-dim);border:1px solid var(--red);height:100%;border-radius:4px 4px 0 0"></div>';
+    html += '</div>';
+    html += '<div class="weight-bar-label" style="color:var(--text3)">If Legacy</div>';
+    html += '<div class="weight-bar-val" style="color:var(--red)">' + ss.weight_if_legacy + ' WU</div>';
+    html += '</div>';
+    // Actual bar
+    html += '<div class="savings-arrow">↓ ' + ss.savings_pct + '% saved</div>';
+    html += '<div class="weight-bar-wrap">';
+    html += '<div class="weight-bar" style="height:' + actualH + 'px">';
+    html += '<div class="weight-bar-fill" style="background:var(--green-dim);border:1px solid var(--green);height:100%;border-radius:4px 4px 0 0"></div>';
+    html += '</div>';
+    html += '<div class="weight-bar-label" style="color:var(--text3)">Actual SegWit</div>';
+    html += '<div class="weight-bar-val" style="color:var(--green)">' + ss.weight_actual + ' WU</div>';
+    html += '</div>';
+    html += '</div>';
+    // Witness breakdown
+    html += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">';
+    html += '<div class="fee-legend-item"><div class="fee-legend-dot" style="background:var(--blue)"></div>Non-witness: ' + ss.non_witness_bytes + 'B</div>';
+    html += '<div class="fee-legend-item"><div class="fee-legend-dot" style="background:var(--green)"></div>Witness: ' + ss.witness_bytes + 'B (discounted)</div>';
+    html += '</div>';
+    html += '</div>';
+  }
+
+  // 7. Inputs / Outputs detail
+  html += '<div class="io-grid">';
+
+  // Inputs
+  html += '<div class="io-card" style="animation-delay:0.1s">';
+  html += '<div class="io-card-header">';
+  html += '<div class="io-card-title" style="color:var(--blue)">↙ Inputs (' + d.vin.length + ')</div>';
+  html += '<div style="font-family:var(--data);font-size:11px;color:var(--text3)">' + d.total_input_sats.toLocaleString() + ' sats</div>';
+  html += '</div><div class="io-items">';
+  d.vin.forEach((inp, i) => {
+    html += '<div class="io-item">';
+    html += '<div class="io-item-top">';
+    html += '<span class="io-item-num">Input #' + i + '</span>';
+    html += '<span class="io-item-val">' + fmtSats(inp.prevout.value_sats) + '</span>';
+    html += '</div>';
+    html += '<div class="io-item-addr">' + fmtAddr(inp.address, inp.script_type) + '</div>';
+    html += '<div class="io-item-meta">';
+    html += scriptBadge(inp.script_type);
+    const seq = inp.sequence;
+    if (seq < 0xFFFFFFFE) html += '<span class="badge badge-red">RBF seq: 0x' + seq.toString(16) + '</span>';
+    if (inp.relative_timelock && inp.relative_timelock.enabled) {
+      html += '<span class="badge badge-amber" data-tip="BIP68 relative timelock">⏳ ' + inp.relative_timelock.value + ' ' + inp.relative_timelock.type + '</span>';
+    }
+    if (inp.witness && inp.witness.length > 0) {
+      html += '<button class="witness-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">witness (' + inp.witness.length + ')</button>';
+      html += '<div class="witness-data">';
+      inp.witness.forEach((w, wi) => {
+        html += '<div style="color:var(--text3)">[' + wi + ']</div>';
+        html += '<div style="word-break:break-all;margin-bottom:8px">' + (w || '<em>empty</em>') + '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div></div>';
+  });
+  html += '</div></div>';
+
+  // Outputs
+  html += '<div class="io-card" style="animation-delay:0.15s">';
+  html += '<div class="io-card-header">';
+  html += '<div class="io-card-title" style="color:var(--green)">↗ Outputs (' + d.vout.length + ')</div>';
+  html += '<div style="font-family:var(--data);font-size:11px;color:var(--text3)">' + d.total_output_sats.toLocaleString() + ' sats</div>';
+  html += '</div><div class="io-items">';
+  d.vout.forEach(out => {
+    const isDust = out.value_sats < 546 && out.script_type !== 'op_return';
+    html += '<div class="io-item">';
+    html += '<div class="io-item-top">';
+    html += '<span class="io-item-num">Output #' + out.n + '</span>';
+    html += '<span class="io-item-val">' + fmtSats(out.value_sats) + '</span>';
+    html += '</div>';
+    if (out.address) html += '<div class="io-item-addr">' + fmtAddr(out.address, out.script_type) + '</div>';
+    if (out.op_return_data_utf8) html += '<div class="io-item-addr" style="color:var(--amber)">"' + out.op_return_data_utf8 + '"</div>';
+    html += '<div class="io-item-meta">';
+    html += scriptBadge(out.script_type);
+    if (isDust) html += '<span class="badge badge-red">⚠ DUST</span>';
+    if (out.op_return_protocol && out.op_return_protocol !== 'unknown') html += '<span class="badge badge-blue">' + out.op_return_protocol + '</span>';
+    html += '</div></div>';
+  });
+  html += '</div></div>';
+
+  html += '</div>'; // io-grid
+
+  // 8. Warnings
+  html += '<div id="sec-risks">';
+  if (d.warnings && d.warnings.length > 0) {
+    html += '<div class="section-title" style="margin-bottom:16px">// Warnings & Flags</div>';
+    html += '<div class="warnings-list">';
+    d.warnings.forEach(w => {
+      const icons = { HIGH_FEE:'🔥', DUST_OUTPUT:'⚠️', RBF_SIGNALING:'🔄', UNKNOWN_OUTPUT_SCRIPT:'❓' };
+      html += '<div class="warning-card">';
+      html += '<div class="warning-icon">' + (icons[w.code]||'⚠') + '</div>';
+      html += '<div><div class="warning-code">' + w.code + '</div>';
+      if (w.message) html += '<div class="warning-msg">' + w.message + '</div>';
+      html += '<div class="warning-explain">' + warnExplain(w.code) + '</div>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div style="padding:20px;background:var(--green-dim);border:1px solid rgba(0,229,160,0.2);border-radius:8px;font-family:var(--data);font-size:13px;color:var(--green)">';
+    html += '✓ No warnings — this transaction looks clean.';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // 9. Technical details (collapsed)
+  html += '<div class="tech-section" style="margin-top:28px">';
+  html += '<button class="tech-toggle" onclick="toggleTech(this)">';
+  html += '<span>⟨/⟩ Show Technical Details (hex, ASM, raw fields)</span>';
+  html += '<span class="tech-toggle-arrow">▼</span>';
+  html += '</button>';
+  html += '<div class="tech-body">';
+
+  html += '<table class="kv-table">';
+  html += kvRow('txid', d.txid);
+  if (d.wtxid) html += kvRow('wtxid', d.wtxid);
+  html += kvRow('version', d.version);
+  html += kvRow('locktime', d.locktime + ' [' + d.locktime_type + ']');
+  html += kvRow('size_bytes', d.size_bytes);
+  html += kvRow('weight', d.weight + ' WU');
+  html += kvRow('vbytes', d.vbytes + ' vB');
+  html += kvRow('fee_rate_sat_vb', d.fee_rate_sat_vb);
+  html += kvRow('rbf_signaling', d.rbf_signaling);
+  html += '</table>';
+
+  // Scripts
+  d.vin.forEach((inp, i) => {
+    if (inp.script_sig_hex) {
+      html += '<div style="font-family:var(--data);font-size:10px;color:var(--text3);margin:12px 0 4px;letter-spacing:0.1em">INPUT #' + i + ' SCRIPTSIG</div>';
+      html += '<div class="hex-block">' + inp.script_sig_hex + '</div>';
+      if (inp.script_asm) html += '<div class="hex-block" style="color:var(--green)">' + inp.script_asm + '</div>';
+    }
+  });
+  d.vout.forEach((out, i) => {
+    html += '<div style="font-family:var(--data);font-size:10px;color:var(--text3);margin:12px 0 4px;letter-spacing:0.1em">OUTPUT #' + i + ' SCRIPTPUBKEY</div>';
+    html += '<div class="hex-block">' + out.script_pubkey_hex + '</div>';
+    if (out.script_asm) html += '<div class="hex-block" style="color:var(--green)">' + out.script_asm + '</div>';
+  });
+
+  html += '</div></div>'; // tech section
+
+  rt.innerHTML = html;
+}
+
+function statCard(label, val, sub) {
+  return '<div class="stat-card"><div class="stat-label">' + label + '</div><div class="stat-value">' + val + '</div><div class="stat-sub">' + sub + '</div></div>';
+}
+
+function kvRow(k, v) {
+  return '<tr><td>' + k + '</td><td>' + v + '</td></tr>';
+}
+
+function toggleTech(btn) {
+  btn.classList.toggle('open');
+  btn.nextElementSibling.classList.toggle('open');
+}
+
+// ── Render block ──────────────────────────────────────────────────────────────
+function renderBlock(d) {
+  const rt = document.getElementById('renderTarget');
+  const h  = d.block_header;
+  const st = d.block_stats;
+  const cb = d.coinbase;
+
+  let html = '';
+
+  // Plain English
+  html += '<div class="plain-english">';
+  html += 'This is <strong>Bitcoin block #' + cb.bip34_height + '</strong>. ';
+  html += 'It contains <strong>' + d.tx_count + ' transactions</strong> ';
+  html += 'and miners earned <em>' + (st.total_fees_sats/1e8).toFixed(8) + ' BTC</em> in fees ';
+  html += 'plus the block reward. The total block weight is <em>' + st.total_weight.toLocaleString() + ' WU</em>.';
+  html += '</div>';
+
+  // Block header
+  html += '<div class="block-header-card">';
+  html += '<div class="section-title">// Block Header</div>';
+  html += '<div class="block-hash"><span>' + h.block_hash.slice(0,16) + '</span>' + h.block_hash.slice(16) + '</div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">';
+  html += '<span class="badge badge-amber">Block #' + cb.bip34_height + '</span>';
+  html += '<span class="badge ' + (h.merkle_root_valid ? 'badge-green' : 'badge-red') + '">';
+  html += (h.merkle_root_valid ? '✓ Merkle Valid' : '✗ Merkle INVALID') + '</span>';
+  html += '<span class="badge badge-gray">' + d.tx_count + ' txs</span>';
+  html += '</div>';
+  html += '<table class="kv-table">';
+  html += kvRow('Timestamp', new Date(h.timestamp * 1000).toISOString());
+  html += kvRow('Version', h.version);
+  html += kvRow('Bits', h.bits);
+  html += kvRow('Nonce', h.nonce);
+  html += kvRow('Prev Hash', h.prev_block_hash);
+  html += kvRow('Merkle Root', h.merkle_root);
+  html += '</table>';
+  html += '</div>';
+
+  // Stats
+  html += '<div class="summary-grid">';
+  html += statCard('Transactions', d.tx_count, 'in this block', '');
+  html += statCard('Total Fees', (st.total_fees_sats/1e8).toFixed(8) + ' BTC', st.total_fees_sats.toLocaleString() + ' sats', '');
+  html += statCard('Block Weight', st.total_weight.toLocaleString(), 'weight units', '');
+  html += statCard('Avg Fee Rate', st.avg_fee_rate_sat_vb, 'sat per vByte', '');
+  html += '</div>';
+
+  // Script type summary
+  if (st.script_type_summary) {
+    html += '<div class="panel" style="margin-bottom:20px">';
+    html += '<div class="panel-title">Output Script Type Distribution</div>';
+    const types = Object.entries(st.script_type_summary).sort((a,b) => b[1]-a[1]);
+    const maxVal = types[0][1];
+    types.forEach(([type, count]) => {
+      const pct = (count / maxVal * 100).toFixed(1);
+      html += '<div style="margin-bottom:10px">';
+      html += '<div style="display:flex;justify-content:space-between;margin-bottom:4px">';
+      html += '<span>' + scriptBadge(type) + '</span>';
+      html += '<span style="font-family:var(--mono);font-size:12px;color:var(--text2)">' + count.toLocaleString() + '</span>';
+      html += '</div>';
+      const colors = { p2wpkh:'var(--green)', p2tr:'var(--amber)', p2pkh:'var(--blue)', p2sh:'var(--purple)', p2wsh:'var(--green2)', op_return:'var(--text3)' };
+      const col = colors[type] || 'var(--text3)';
+      html += '<div style="height:4px;background:var(--bg3);border-radius:2px">';
+      html += '<div style="height:100%;width:' + pct + '%;background:' + col + ';border-radius:2px;transition:width 1s ease"></div>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+  }
+
+  // Coinbase
+  html += '<div class="panel" style="margin-bottom:20px">';
+  html += '<div class="panel-title">Coinbase Transaction</div>';
+  html += '<table class="kv-table">';
+  html += kvRow('Block Height (BIP34)', cb.bip34_height);
+  html += kvRow('Block Reward + Fees', fmtSats(cb.total_output_sats));
+  html += kvRow('Coinbase Script', '<span style="font-family:var(--data);font-size:11px;word-break:break-all">' + cb.coinbase_script_hex + '</span>');
+  html += '</table></div>';
+
+  // Tx list
+  html += '<div class="section-title" style="margin-bottom:12px">// Transactions (' + d.tx_count + ')</div>';
+  html += '<div class="tx-list">';
+  const txs = d.transactions || [];
+  txs.forEach((tx, i) => {
+    html += '<div class="tx-row">';
+    html += '<div class="tx-row-head" onclick="toggleTxRow(this)">';
+    html += '<span style="font-family:var(--mono);font-size:11px;color:var(--text3)">#' + i + '</span>';
+    html += '<span class="tx-row-txid">' + tx.txid + '</span>';
+    html += '<span>' + scriptBadge(i===0?'coinbase':'') + '</span>';
+    html += '<span class="tx-row-fee">' + tx.fee_sats + ' sats</span>';
+    html += '<span style="color:var(--text3);font-size:12px">▼</span>';
+    html += '</div>';
+    html += '<div class="tx-row-body">';
+    html += '<table class="kv-table">';
+    html += kvRow('txid', tx.txid);
+    html += kvRow('fee', tx.fee_sats + ' sats (' + tx.fee_rate_sat_vb + ' sat/vB)');
+    html += kvRow('size', tx.size_bytes + ' B / ' + tx.weight + ' WU / ' + tx.vbytes + ' vB');
+    html += kvRow('inputs', tx.vin ? tx.vin.length : '?');
+    html += kvRow('outputs', tx.vout ? tx.vout.length : '?');
+    html += '</table>';
+    html += '</div></div>';
+  });
+  html += '</div>';
+
+  rt.innerHTML = html;
+}
+
+function toggleTxRow(head) {
+  head.nextElementSibling.classList.toggle('open');
+  const arrow = head.querySelector('span:last-child');
+  if (arrow) arrow.textContent = head.nextElementSibling.classList.contains('open') ? '▲' : '▼';
+}
+</script>
+</body>
+</html>
