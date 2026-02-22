@@ -533,7 +533,7 @@ def analyze(fixture_path: str) -> dict:
         stype, addr = classify_input_script(script_sig, witness, prevout_script, mainnet)
         rel_tl = decode_sequence_timelock(inp['sequence'])
 
-        vin.append({
+        vin_entry = {
             'txid': inp['txid'],
             'vout': inp['vout'],
             'sequence': inp['sequence'],
@@ -547,7 +547,20 @@ def analyze(fixture_path: str) -> dict:
                 'script_pubkey_hex': spk_hex,
             },
             'relative_timelock': rel_tl,
-        })
+        }
+
+        # Add witness_script_asm for p2wsh and p2sh-p2wsh (last witness item is the witnessScript)
+        if stype in ('p2wsh', 'p2sh-p2wsh') and witness:
+            last_item = witness[-1]
+            if last_item:
+                try:
+                    vin_entry['witness_script_asm'] = script_to_asm(bytes.fromhex(last_item))
+                except Exception:
+                    vin_entry['witness_script_asm'] = ''
+            else:
+                vin_entry['witness_script_asm'] = ''
+
+        vin.append(vin_entry)
 
     # ---- Outputs ----
     total_output_sats = 0

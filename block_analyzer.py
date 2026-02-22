@@ -20,6 +20,16 @@ from analyzer import (
 
 MAGIC = b'\xf9\xbe\xb4\xd9'
 
+def compute_merkle_root(txids_hex):
+    if not txids_hex:
+        return "0" * 64
+    hashes = [bytes.fromhex(t)[::-1] for t in txids_hex]
+    while len(hashes) > 1:
+        if len(hashes) % 2 == 1:
+            hashes.append(hashes[-1])
+        hashes = [_sha256d(hashes[i] + hashes[i+1]) for i in range(0, len(hashes), 2)]
+    return hashes[0][::-1].hex()
+
 def extract_bip34_height(script_sig: bytes):
     if not script_sig:
         return None
@@ -247,7 +257,7 @@ def parse_block(data: bytes) -> dict:
             "version": version,
             "prev_block_hash": prev,
             "merkle_root": merkle,
-            "merkle_root_valid": True,
+            "merkle_root_valid": False,
             "timestamp": ts,
             "bits": bits,
             "nonce": nonce,
@@ -352,6 +362,15 @@ def format_block(parsed: dict, block_undo: list) -> dict:
         })
 
     avg_fee_rate = round(total_fees / (total_weight / 4), 2) if total_weight else 0
+
+    # ── MERKLE ROOT VERIFICATION ──────────────
+    txids = [tx["txid"] for tx in txs]
+    computed = compute_merkle_root(txids)
+    header_merkle = parsed["header"]["merkle_root"]
+    merkle_valid = (computed.lower() == header_merkle.lower())
+    parsed["header"]["merkle_root_valid"] = merkle_valid
+    if not merkle_valid:
+        return {"ok": False, "error": {"code": "INVALID_MERKLE_ROOT", "message": f"Merkle mismatch: computed {computed}"}}
 
     return {
         "ok": True,
