@@ -232,7 +232,6 @@ header {
   box-shadow: 0 0 16px rgba(240,165,0,.35);
   flex-shrink: 0;
 }
-.logo-text {}
 .logo-name {
   font-family: var(--display);
   font-size: 19px; font-weight: 800;
@@ -677,8 +676,8 @@ textarea::placeholder { color: var(--ink3); }
   display: inline-flex; align-items: center; gap: 8px;
   background: var(--tdim); border: 1px solid rgba(0,200,180,.25);
   color: var(--teal); border-radius: 20px;
-  padding: 7px 18px; font-family: var(--mono); font-size: 12px;
-  margin-top: 8px;
+  padding: 12px 28px; font-family: var(--mono); font-size: 12px;
+  margin-top: 28px;
 }
 
 /* ══ IO Cards ══ */
@@ -743,10 +742,16 @@ textarea::placeholder { color: var(--ink3); }
   display: flex; gap: 14px; margin-bottom: 10px;
   animation: tile-in .4s ease;
 }
-.warn-emoji { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+/* ── CHANGED: warn-emoji now inherits coral so plain text symbols render correctly ── */
+.warn-emoji {
+  font-size: 20px; flex-shrink: 0; margin-top: 2px;
+  color: var(--coral);
+  font-family: var(--mono); font-weight: 700;
+  line-height: 1;
+}
 .warn-code { font-family: var(--mono); font-size: 12px; color: var(--coral); font-weight: 700; margin-bottom: 4px; }
-.warn-msg { font-size: 12px; color: var(--ink2); line-height: 1.65; }
-.warn-why { font-size: 11px; color: var(--ink3); margin-top: 5px; font-style: italic; }
+.warn-msg { font-size: 12px; color: var(--ink); line-height: 1.65; }
+.warn-why { font-size: 11px; color: var(--ink2); margin-top: 5px; font-style: italic; }
 
 /* ══ Tech details ══ */
 .tech-collapse {
@@ -1059,17 +1064,168 @@ let blockFiles = {};
 /* ═══════════════════════════════════════════
    EXAMPLES
 ═══════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════
+   DEMO DATA — pre-baked API responses
+   (used by Load Example buttons, no backend needed)
+═══════════════════════════════════════════ */
+const TX_EXAMPLE_RESULT = {
+  ok: true,
+  network: "mainnet",
+  txid: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+  wtxid: "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+  version: 2,
+  locktime: 0,
+  locktime_type: "block_height",
+  segwit: true,
+  rbf_signaling: true,
+  size_bytes: 249,
+  weight: 669,
+  vbytes: 168,
+  fee_sats: 2100,
+  fee_rate_sat_vb: 12,
+  total_input_sats: 1500000,
+  total_output_sats: 1497900,
+  segwit_savings: {
+    weight_actual: 669,
+    weight_if_legacy: 996,
+    savings_pct: "32.8"
+  },
+  vin: [
+    {
+      txid: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      vout: 0,
+      sequence: 4294967293,
+      script_type: "p2wpkh",
+      script_sig_hex: "",
+      script_asm: "",
+      address: "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq",
+      witness: [
+        "304402200b3c3c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2022034567890abcdef01",
+        "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      ],
+      prevout: { value_sats: 900000 }
+    },
+    {
+      txid: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      vout: 1,
+      sequence: 4294967293,
+      script_type: "p2wpkh",
+      script_sig_hex: "",
+      script_asm: "",
+      address: "bc1q9d8hg5kzrgml6q7zz0e3q4vt3xr48z6wkcv6zs",
+      witness: [
+        "3044022059876543210fedcba9876543210fedcba9876543210fedcba9876543210fedcba02201234abcd",
+        "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+      ],
+      prevout: { value_sats: 600000 }
+    }
+  ],
+  vout: [
+    {
+      n: 0,
+      value_sats: 1400000,
+      script_type: "p2wpkh",
+      script_pubkey_hex: "0014751e76e8199196f454f092f1436d2ad0fcf6f117",
+      script_asm: "OP_0 751e76e8199196f454f092f1436d2ad0fcf6f117",
+      address: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"
+    },
+    {
+      n: 1,
+      value_sats: 97900,
+      script_type: "p2wpkh",
+      script_pubkey_hex: "00143b79aaa0b6c37cd9c8f1bc0e1e4d5f0b1234abcd",
+      script_asm: "OP_0 3b79aaa0b6c37cd9c8f1bc0e1e4d5f0b1234abcd",
+      address: "bc1q8wdn4u5v6t3l7mz2k0e8q5g2xp4rfc7zy2j8k"
+    }
+  ],
+  warnings: [
+    {
+      code: "RBF_SIGNALING",
+      message: "Transaction signals Replace-By-Fee (RBF)."
+    }
+  ]
+};
+
+/* ── Generate 120 fake transactions for the block example ── */
+function _makeFakeTxs(n) {
+  const txs = [];
+  const types = ['p2wpkh','p2tr','p2pkh','p2sh','p2wsh'];
+  for (let i = 0; i < n; i++) {
+    const fee = i === 0 ? 0 : Math.floor(Math.random() * 8000 + 200);
+    const vb  = Math.floor(Math.random() * 400 + 140);
+    txs.push({
+      txid: Array.from({length:64},(_,k)=>'0123456789abcdef'[(i*7+k*13)%16]).join(''),
+      fee_sats: fee,
+      fee_rate_sat_vb: i === 0 ? 0 : Math.floor(fee / vb),
+      size_bytes: vb + 20,
+      weight: (vb + 20) * 4 - Math.floor(Math.random()*100),
+      vbytes: vb,
+      vin: null,
+      vout: null
+    });
+  }
+  return txs;
+}
+
+const BLOCK_EXAMPLE_RESULT = {
+  ok: true,
+  tx_count: 120,
+  block_header: {
+    block_hash: "00000000000000000002a7c4c1e48d76c5a37902165a270156b7a8d72728a054",
+    prev_block_hash: "00000000000000000003d63c2c8d16ed6a96f1f9b7b96ab41f0e2f4c6b7e1234",
+    merkle_root: "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+    merkle_root_valid: true,
+    timestamp: 1716230400,
+    version: 671154176,
+    bits: "17034219",
+    nonce: 3728067685
+  },
+  block_stats: {
+    total_fees_sats: 349396580,
+    total_weight: 3993680,
+    avg_fee_rate_sat_vb: 24,
+    script_type_summary: {
+      p2wpkh: 1840,
+      p2tr: 970,
+      p2pkh: 320,
+      p2sh: 180,
+      p2wsh: 90,
+      op_return: 42,
+      unknown: 8
+    }
+  },
+  coinbase: {
+    bip34_height: 847493,
+    total_output_sats: 349396580,
+    coinbase_script_hex: "0385ee0c194d696e656420627920416e74506f6f6c2023000b06f8a07387fabe6d6de168e2bafa02"
+  },
+  transactions: _makeFakeTxs(120)
+};
+
 const TX_EXAMPLE = {"network":"mainnet","raw_tx":"0200000001111111111111111111111111111111111111111111111111111111111111111100000000000000000002b00400000000000019a914010101010101010101010101010101010101010188ac0000000000000000096a08736f622d32303236","prevouts":[{"txid":"1111111111111111111111111111111111111111111111111111111111111111","vout":0,"value_sats":2000,"script_pubkey_hex":"76a914020202020202020202020202020202020202020288ac"}]};
 
-function loadTxEx() { document.getElementById('fix').value = JSON.stringify(TX_EXAMPLE, null, 2); }
+function loadTxEx() {
+  document.getElementById('fix').value = JSON.stringify(TX_EXAMPLE, null, 2);
+  // Immediately render the pre-baked demo result — no backend needed
+  const d = TX_EXAMPLE_RESULT;
+  document.getElementById('rt').innerHTML = renderTx(d);
+  document.getElementById('results').classList.add('show');
+  updateNavLabels(['What happened','Who paid whom','What it cost','Any risks?']);
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 function clearTx() {
   document.getElementById('fix').value = '';
   document.getElementById('results').classList.remove('show');
   hideErr();
 }
 function loadBlockEx() {
-  // Can't load binary example easily, just show hint
-  showErr('To analyze a block, upload blk*.dat, rev*.dat, and xor.dat from your Bitcoin Core data directory.');
+  const d = BLOCK_EXAMPLE_RESULT;
+  document.getElementById('rt').innerHTML = renderBlock(d);
+  renderTxPage(0);
+  document.getElementById('results').classList.add('show');
+  updateNavLabels(['Block Overview','Transactions','Stats','Coinbase']);
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function clearBlock() {
   blockFiles = {};
@@ -1158,6 +1314,7 @@ async function analyzeBlock() {
     hideLoading();
     if (!d.ok) { showErr((d.error && d.error.message) || 'Block analysis failed'); return; }
     document.getElementById('rt').innerHTML = renderBlock(d);
+    renderTxPage(0);
     document.getElementById('results').classList.add('show');
     updateNavLabels(['Block Overview','Transactions','Stats','Coinbase']);
     document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1260,7 +1417,7 @@ function renderTx(d) {
   h += `<span class="badge ${d.segwit?'b-green':'b-gray'}">${d.segwit?'⚡ SegWit':'Legacy'}</span>`;
   h += `<span class="badge b-sky">${d.network}</span>`;
   h += `<span class="badge b-gray">Version ${d.version}</span>`;
-  if (d.rbf_signaling) h += `<span class="badge b-red" data-tip="Replace-By-Fee: can be replaced before confirmation">🔄 RBF</span>`;
+  if (d.rbf_signaling) h += `<span class="badge b-red" data-tip="Replace-By-Fee: can be replaced before confirmation">↺ RBF</span>`;
   if (d.locktime > 0)  h += `<span class="badge b-gold" data-tip="Timelock: ${d.locktime} [${d.locktime_type}]">⏳ Locktime</span>`;
   h += `</div></div>`;
   h += `</div>`; // s-sum
@@ -1407,9 +1564,10 @@ function renderTx(d) {
   h += `<div id="s-risk" class="risk-section">`;
   h += `<div class="sec-head" style="margin-bottom:14px">Risk Check</div>`;
   if (d.warnings && d.warnings.length) {
-    const icons = {HIGH_FEE:'🔥',DUST_OUTPUT:'⚠️',RBF_SIGNALING:'🔄',UNKNOWN_OUTPUT_SCRIPT:'❓'};
+    // ── CHANGED: replaced emoji map with plain text symbols that inherit color ──
+    const icons = {HIGH_FEE:'!', DUST_OUTPUT:'▲', RBF_SIGNALING:'↺', UNKNOWN_OUTPUT_SCRIPT:'?'};
     d.warnings.forEach(w => {
-      h += `<div class="warn-item"><div class="warn-emoji">${icons[w.code]||'⚠'}</div>`;
+      h += `<div class="warn-item"><div class="warn-emoji">${icons[w.code]||'!'}</div>`;
       h += `<div><div class="warn-code">${w.code}</div>`;
       if (w.message) h += `<div class="warn-msg">${w.message}</div>`;
       h += `<div class="warn-why">${warnExplain(w.code)}</div></div></div>`;
@@ -1515,26 +1673,16 @@ function renderBlock(d) {
   h += `</table></div>`;
 
   // TX list
+  // Store txs globally for pagination
+  window._blkTxs = d.transactions || [];
+  window._blkPage = 0;
   h += `<div class="tx-list-wrap">`;
-  h += `<div class="sec-head" style="margin-bottom:10px">Transactions (${d.transactions ? d.transactions.length : 0})</div>`;
-  (d.transactions || []).forEach((tx, i) => {
-    h += `<div class="tx-row">`;
-    h += `<div class="tx-row-hd" onclick="toggleTxRow(this)">`;
-    h += `<span class="tx-row-idx">#${i}</span>`;
-    h += `<span class="tx-row-id">${tx.txid}</span>`;
-    if (i === 0) h += scriptBadge('coinbase');
-    h += `<span class="tx-row-fee">${tx.fee_sats.toLocaleString()} sats</span>`;
-    h += `<span class="tx-row-arr">▼</span>`;
-    h += `</div>`;
-    h += `<div class="tx-row-body">`;
-    h += `<table class="kv-table">`;
-    h += kv('txid', tx.txid);
-    h += kv('fee', tx.fee_sats + ' sats (' + tx.fee_rate_sat_vb + ' sat/vB)');
-    h += kv('size / weight / vbytes', `${tx.size_bytes}B / ${tx.weight}WU / ${tx.vbytes}vB`);
-    h += kv('inputs', tx.vin ? tx.vin.length : '?');
-    h += kv('outputs', tx.vout ? tx.vout.length : '?');
-    h += `</table></div></div>`;
-  });
+  h += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">`;
+  h += `<div class="sec-head">Transactions (${d.transactions ? d.transactions.length : 0})</div>`;
+  h += `<div id="tx-page-info" style="font-family:var(--mono);font-size:10px;color:var(--ink3)"></div>`;
+  h += `</div>`;
+  h += `<div id="tx-page-list"></div>`;
+  h += `<div id="tx-page-controls" style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:14px"></div>`;
   h += `</div>`;
 
   return h;
@@ -1568,6 +1716,70 @@ function toggleTxRow(hd) {
   const arr = hd.querySelector('.tx-row-arr');
   if (arr) arr.textContent = body.classList.contains('open') ? '▲' : '▼';
 }
+
+/* ═══════════════════════════════════════════
+   TX PAGINATION
+═══════════════════════════════════════════ */
+const TX_PAGE_SIZE = 50;
+
+function renderTxPage(page) {
+  const txs = window._blkTxs || [];
+  const total = txs.length;
+  const totalPages = Math.ceil(total / TX_PAGE_SIZE);
+  page = Math.max(0, Math.min(page, totalPages - 1));
+  window._blkPage = page;
+
+  const start = page * TX_PAGE_SIZE;
+  const end = Math.min(start + TX_PAGE_SIZE, total);
+  const slice = txs.slice(start, end);
+
+  // Render rows
+  let h = '';
+  slice.forEach((tx, si) => {
+    const i = start + si;
+    h += `<div class="tx-row">`;
+    h += `<div class="tx-row-hd" onclick="toggleTxRow(this)">`;
+    h += `<span class="tx-row-idx">#${i}</span>`;
+    h += `<span class="tx-row-id">${tx.txid}</span>`;
+    if (i === 0) h += scriptBadge('coinbase');
+    h += `<span class="tx-row-fee">${tx.fee_sats.toLocaleString()} sats</span>`;
+    h += `<span class="tx-row-arr">▼</span>`;
+    h += `</div>`;
+    h += `<div class="tx-row-body">`;
+    h += `<table class="kv-table">`;
+    h += kv('txid', tx.txid);
+    h += kv('fee', tx.fee_sats + ' sats (' + tx.fee_rate_sat_vb + ' sat/vB)');
+    h += kv('size / weight / vbytes', `${tx.size_bytes}B / ${tx.weight}WU / ${tx.vbytes}vB`);
+    h += kv('inputs', tx.vin ? tx.vin.length : '?');
+    h += kv('outputs', tx.vout ? tx.vout.length : '?');
+    h += `</table></div></div>`;
+  });
+  document.getElementById('tx-page-list').innerHTML = h;
+
+  // Page info
+  document.getElementById('tx-page-info').textContent =
+    `${start + 1}–${end} of ${total}`;
+
+  // Controls
+  const btnStyle = `font-family:var(--mono);font-size:10px;padding:7px 18px;border-radius:6px;border:1px solid var(--rim2);background:var(--panel);color:var(--ink2);cursor:pointer;letter-spacing:.08em;transition:all .15s`;
+  const btnActiveStyle = `font-family:var(--mono);font-size:10px;padding:7px 18px;border-radius:6px;border:1px solid var(--gold);background:var(--gdim);color:var(--gold);cursor:pointer;letter-spacing:.08em`;
+  let ctrl = '';
+  ctrl += `<button style="${page === 0 ? 'opacity:.35;cursor:default;'+btnStyle : btnStyle}" onclick="renderTxPage(${page-1})" ${page===0?'disabled':''}>← Prev</button>`;
+  // Page number pills — show a window of pages
+  const windowSize = 5;
+  let pStart = Math.max(0, page - Math.floor(windowSize/2));
+  let pEnd = Math.min(totalPages, pStart + windowSize);
+  if (pEnd - pStart < windowSize) pStart = Math.max(0, pEnd - windowSize);
+  for (let p = pStart; p < pEnd; p++) {
+    ctrl += `<button style="${p===page ? btnActiveStyle : btnStyle}" onclick="renderTxPage(${p})">${p+1}</button>`;
+  }
+  ctrl += `<button style="${page >= totalPages-1 ? 'opacity:.35;cursor:default;'+btnStyle : btnStyle}" onclick="renderTxPage(${page+1})" ${page>=totalPages-1?'disabled':''}>Next →</button>`;
+  document.getElementById('tx-page-controls').innerHTML = ctrl;
+
+  // Scroll list into view smoothly
+  document.getElementById('tx-page-list').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 </script>
 </body>
 </html>
