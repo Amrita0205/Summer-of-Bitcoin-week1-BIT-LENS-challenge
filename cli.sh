@@ -58,8 +58,13 @@ if [[ "${1:-}" == "--block" ]]; then
     fi
   done
   mkdir -p out
-  python3 "$SCRIPT_DIR/block_analyzer.py" "$BLK_FILE" "$REV_FILE" "$XOR_FILE"
-  exit 0
+  # Run block analyzer with hard timeout (grader requires < 60s)
+  if ! timeout 55s python3 "$SCRIPT_DIR/block_analyzer.py" "$BLK_FILE" "$REV_FILE" "$XOR_FILE"; then
+  error_json "TIMEOUT" "Block parsing timed out"
+  exit 1
+fi
+
+exit 0
 fi
 
 # ── Transaction mode (JSON for grader) ───────────────────────────────────────

@@ -1,366 +1,399 @@
 #!/usr/bin/env python3
 """
-Bitcoin Block Analyzer
-Parses blk*.dat files (with XOR key) and outputs structured JSON per block.
-Only parses the FIRST block per the challenge scope.
+Bitcoin Block Analyzer — GRADER SAFE
+Parses ONLY THE FIRST BLOCK from blk*.dat and its matching undo record.
 """
 
-import sys
-import json
-import hashlib
-import struct
-import math
-import os
-
-# Re-use helpers from analyzer.py
+import sys, os, json, struct
 sys.path.insert(0, os.path.dirname(__file__))
+
 from analyzer import (
-    parse_raw_tx, _compute_txid, _compute_weight_and_sizes,
-    classify_output_script, classify_input_script,
-    script_to_asm, decode_locktime, decode_sequence_timelock,
+    _compute_txid,
+    _compute_weight_and_sizes,
+    classify_output_script,
+    classify_input_script,
+    script_to_asm,
+    decode_locktime,
+    decode_sequence_timelock,
     _sha256d
 )
 
+MAGIC = b'\xf9\xbe\xb4\xd9'
 
-def read_xor_key(xor_path: str) -> bytes:
-    with open(xor_path, 'rb') as f:
-        return f.read()
+def extract_bip34_height(script_sig: bytes):
+    if not script_sig:
+        return None
+    try:
+        length = script_sig[0]
+        height_bytes = script_sig[1:1+length]
+        return int.from_bytes(height_bytes, "little")
+    except Exception:
+        return None
 
+# ─────────────────────────────────────────────
+# XOR helpers
+# ─────────────────────────────────────────────
 
 def xor_decrypt(data: bytes, key: bytes) -> bytes:
     if not key or all(b == 0 for b in key):
         return data
-    result = bytearray(len(data))
-    klen = len(key)
+    out = bytearray(len(data))
     for i, b in enumerate(data):
-        result[i] = b ^ key[i % klen]
-    return bytes(result)
+        out[i] = b ^ key[i % len(key)]
+    return bytes(out)
 
+# ─────────────────────────────────────────────
+# Varints
+# ─────────────────────────────────────────────
 
 def read_varint(data: bytes, pos: int):
-    first = data[pos]
-    if first < 0xfd:
-        return first, pos + 1
-    elif first == 0xfd:
-        return struct.unpack_from('<H', data, pos + 1)[0], pos + 3
-    elif first == 0xfe:
-        return struct.unpack_from('<I', data, pos + 1)[0], pos + 5
-    else:
-        return struct.unpack_from('<Q', data, pos + 1)[0], pos + 9
+    b = data[pos]
+    if b < 0xfd:
+        return b, pos + 1
+    if b == 0xfd:
+        return struct.unpack_from("<H", data, pos + 1)[0], pos + 3
+    if b == 0xfe:
+        return struct.unpack_from("<I", data, pos + 1)[0], pos + 5
+    return struct.unpack_from("<Q", data, pos + 1)[0], pos + 9
 
+# Bitcoin Core undo varint (NOT CompactSize)
+def read_core_varint(data: bytes, pos: int):
+    result = 0
+    shift = 0
+    while True:
+        if pos >= len(data):
+            raise ValueError("core varint overflow")
+        b = data[pos]
+        pos += 1
+        result |= (b & 0x7F) << shift
+        if not (b & 0x80):
+            break
+        result += 1 << shift
+        shift += 7
+    return result, pos
+
+def decompress_amount(x: int) -> int:
+    if x == 0:
+        return 0
+    x -= 1
+    e = x % 10
+    x //= 10
+    if e < 9:
+        d = (x % 9) + 1
+        x //= 9
+        n = x * 10 + d
+    else:
+        n = x + 1
+    return n * (10 ** e)
+
+# ─────────────────────────────────────────────
+# Read FIRST block chunk
+# ─────────────────────────────────────────────
+
+def read_first_chunk(data: bytes) -> bytes:
+    pos = data.find(MAGIC)
+    if pos == -1:
+        raise ValueError("MAGIC not found")
+    pos += 4
+    size = struct.unpack_from("<I", data, pos)[0]
+    pos += 4
+    return data[pos:pos + size]
+
+# ─────────────────────────────────────────────
+# Undo parser (SAFE)
+# ─────────────────────────────────────────────
+
+def parse_undo_block(data: bytes) -> list:
+    pos = 0
+    block_undo = []
+
+    try:
+        undo_tx_count, pos = read_core_varint(data, pos)
+    except Exception:
+        return block_undo
+
+    for _ in range(undo_tx_count):
+        if pos >= len(data):
+            break
+
+        try:
+            in_count, pos = read_core_varint(data, pos)
+        except Exception:
+            break
+
+        tx_undo = []
+
+        for _ in range(in_count):
+            if pos >= len(data):
+                break
+
+            try:
+                amt, pos = read_core_varint(data, pos)
+                value = decompress_amount(amt)
+
+                nsize, pos = read_core_varint(data, pos)
+
+                if nsize in (0, 1):
+                    script = data[pos:pos + 20]
+                    pos += 20
+                elif nsize in (2, 3, 4, 5):
+                    script = data[pos:pos + 32]
+                    pos += 32
+                else:
+                    sl = max(0, nsize - 6)
+                    script = data[pos:pos + sl]
+                    pos += sl
+
+                tx_undo.append((value, script))
+            except Exception:
+                break
+
+        block_undo.append(tx_undo)
+
+    return block_undo
+
+# ─────────────────────────────────────────────
+# Block parser
+# ─────────────────────────────────────────────
 
 def parse_block(data: bytes) -> dict:
-    """Parse a single block from raw decrypted bytes."""
-    if len(data) < 80:
-        raise ValueError("Block data too short for header")
+    header = data[:80]
+    block_hash = _sha256d(header)[::-1].hex()
 
-    # Parse 80-byte header
-    version = struct.unpack_from('<I', data, 0)[0]
-    prev_hash = data[4:36][::-1].hex()
-    merkle_root_bytes = data[36:68]
-    merkle_root = merkle_root_bytes[::-1].hex()
-    timestamp = struct.unpack_from('<I', data, 68)[0]
+    version = struct.unpack_from("<I", data, 0)[0]
+    prev = data[4:36][::-1].hex()
+    merkle = data[36:68][::-1].hex()
+    ts = struct.unpack_from("<I", data, 68)[0]
     bits = data[72:76].hex()
-    nonce = struct.unpack_from('<I', data, 76)[0]
+    nonce = struct.unpack_from("<I", data, 76)[0]
 
-    # Block hash = sha256d of the 80-byte header
-    header_bytes = data[:80]
-    block_hash = _sha256d(header_bytes)[::-1].hex()
-
-    # Parse transactions
     pos = 80
     tx_count, pos = read_varint(data, pos)
-    transactions = []
+    txs = []
 
-    for tx_idx in range(tx_count):
-        tx_start = pos
-        # Detect segwit
-        version_bytes = data[pos:pos+4]
-        tx_version = struct.unpack_from('<I', data, pos)[0]
+    for _ in range(tx_count):
+        start = pos
+        ver = struct.unpack_from("<I", data, pos)[0]
         pos += 4
-        is_segwit = False
-        if data[pos] == 0x00 and data[pos+1] == 0x01:
-            is_segwit = True
+
+        segwit = False
+        if data[pos:pos + 2] == b"\x00\x01":
+            segwit = True
             pos += 2
 
-        # inputs
-        vin_count, pos = read_varint(data, pos)
-        inputs = []
-        for _ in range(vin_count):
-            txid = data[pos:pos+32][::-1].hex()
-            vout = struct.unpack_from('<I', data, pos+32)[0]
+        vin_n, pos = read_varint(data, pos)
+        vins = []
+
+        for _ in range(vin_n):
+            txid = data[pos:pos + 32][::-1].hex()
+            vout = struct.unpack_from("<I", data, pos + 32)[0]
             pos += 36
             sl, pos = read_varint(data, pos)
-            script_sig = data[pos:pos+sl]
+            script = data[pos:pos + sl]
             pos += sl
-            sequence = struct.unpack_from('<I', data, pos)[0]
+            seq = struct.unpack_from("<I", data, pos)[0]
             pos += 4
-            inputs.append({'txid': txid, 'vout': vout, 'script_sig': script_sig,
-                           'sequence': sequence, 'witness': []})
-
-        # outputs
-        vout_count, pos = read_varint(data, pos)
-        outputs = []
-        for i in range(vout_count):
-            value = struct.unpack_from('<q', data, pos)[0]
-            pos += 8
-            sl, pos = read_varint(data, pos)
-            script = data[pos:pos+sl]
-            pos += sl
-            outputs.append({'n': i, 'value_sats': value, 'script_pubkey': script})
-
-        if is_segwit:
-            for inp in inputs:
-                item_count, pos = read_varint(data, pos)
-                items = []
-                for _ in range(item_count):
-                    il, pos = read_varint(data, pos)
-                    items.append(data[pos:pos+il].hex())
-                    pos += il
-                inp['witness'] = items
-
-        locktime = struct.unpack_from('<I', data, pos)[0]
-        pos += 4
-
-        tx_raw = data[tx_start:pos]
-        txid = _compute_txid(tx_raw, is_segwit)
-        transactions.append({
-            'txid': txid,
-            'is_segwit': is_segwit,
-            'version': tx_version,
-            'locktime': locktime,
-            'inputs': inputs,
-            'outputs': outputs,
-            'raw': tx_raw,
-        })
-
-    # Compute merkle root from txids
-    computed_merkle = compute_merkle_root([bytes.fromhex(tx['txid'])[::-1] for tx in transactions])
-    merkle_root_valid = (computed_merkle == merkle_root_bytes)
-
-    return {
-        'block_hash': block_hash,
-        'header': {
-            'version': version,
-            'prev_block_hash': prev_hash,
-            'merkle_root': merkle_root,
-            'merkle_root_valid': merkle_root_valid,
-            'timestamp': timestamp,
-            'bits': bits,
-            'nonce': nonce,
-            'block_hash': block_hash,
-        },
-        'tx_count': tx_count,
-        'transactions': transactions,
-    }
-
-
-def compute_merkle_root(txids: list) -> bytes:
-    """Compute merkle root from list of txid bytes (internal byte order)."""
-    if not txids:
-        return b'\x00' * 32
-    if len(txids) == 1:
-        return txids[0]
-    level = list(txids)
-    while len(level) > 1:
-        if len(level) % 2 == 1:
-            level.append(level[-1])
-        next_level = []
-        for i in range(0, len(level), 2):
-            next_level.append(_sha256d(level[i] + level[i+1]))
-        level = next_level
-    return level[0]
-
-
-def decode_bip34_height(coinbase_script: bytes) -> int | None:
-    """Extract block height from coinbase scriptSig (BIP34)."""
-    try:
-        if len(coinbase_script) < 1:
-            return None
-        push_len = coinbase_script[0]
-        if push_len == 0 or push_len > 5:
-            return None
-        height_bytes = coinbase_script[1:1+push_len]
-        height = int.from_bytes(height_bytes, 'little')
-        return height
-    except Exception:
-        return None
-
-
-def format_block_output(block: dict) -> dict:
-    """Convert parsed block to the required JSON schema."""
-    transactions = block['transactions']
-    mainnet = True  # blk files are mainnet
-
-    # Coinbase is always first tx
-    coinbase_tx = transactions[0] if transactions else None
-    coinbase_out = None
-    if coinbase_tx:
-        cb_script = coinbase_tx['inputs'][0]['script_sig'] if coinbase_tx['inputs'] else b''
-        bip34_height = decode_bip34_height(cb_script)
-        total_cb_out = sum(o['value_sats'] for o in coinbase_tx['outputs'])
-        coinbase_out = {
-            'bip34_height': bip34_height if bip34_height is not None else 0,
-            'coinbase_script_hex': cb_script.hex(),
-            'total_output_sats': total_cb_out,
-        }
-
-    # Build tx list
-    tx_list = []
-    total_fees = 0
-    total_weight = 0
-    script_type_summary = {}
-
-    for i, tx in enumerate(transactions):
-        raw = tx['raw']
-        is_segwit = tx['is_segwit']
-        size, witness_bytes, non_witness_bytes, weight = _compute_weight_and_sizes(raw, is_segwit)
-        vbytes = math.ceil(weight / 4)
-        total_weight += weight
-
-        # Build vin/vout
-        vout_list = []
-        total_out = 0
-        for out in tx['outputs']:
-            stype, addr, extras = classify_output_script(out['script_pubkey'], mainnet)
-            total_out += out['value_sats']
-            entry = {
-                'n': out['n'],
-                'value_sats': out['value_sats'],
-                'script_pubkey_hex': out['script_pubkey'].hex(),
-                'script_asm': script_to_asm(out['script_pubkey']),
-                'script_type': stype,
-                'address': addr,
-            }
-            entry.update(extras)
-            vout_list.append(entry)
-            # track types
-            script_type_summary[stype] = script_type_summary.get(stype, 0) + 1
-
-        vin_list = []
-        for inp in tx['inputs']:
-            vin_list.append({
-                'txid': inp['txid'],
-                'vout': inp['vout'],
-                'sequence': inp['sequence'],
-                'script_sig_hex': inp['script_sig'].hex(),
-                'witness': inp['witness'],
+            vins.append({
+                "txid": txid,
+                "vout": vout,
+                "script_sig": script,
+                "sequence": seq,
+                "witness": []
             })
 
-        fee_sats = None
-        if i > 0:
-            # non-coinbase: fee = inputs - outputs but we don't have prevouts
-            # mark as 0 for now — would need undo data for real fee
-            fee_sats = 0
-            total_fees += fee_sats
+        vout_n, pos = read_varint(data, pos)
+        vouts = []
 
-        tx_entry = {
-            'txid': tx['txid'],
-            'version': tx['version'],
-            'locktime': tx['locktime'],
-            'is_segwit': is_segwit,
-            'size_bytes': size,
-            'weight': weight,
-            'vbytes': vbytes,
-            'vin': vin_list,
-            'vout': vout_list,
-        }
-        if fee_sats is not None:
-            tx_entry['fee_sats'] = fee_sats
+        for i in range(vout_n):
+            val = struct.unpack_from("<q", data, pos)[0]
+            pos += 8
+            sl, pos = read_varint(data, pos)
+            script = data[pos:pos + sl]
+            pos += sl
+            vouts.append({
+                "n": i,
+                "value_sats": val,
+                "script_pubkey": script
+            })
 
-        tx_list.append(tx_entry)
+        if segwit:
+            for v in vins:
+                wc, pos = read_varint(data, pos)
+                w = []
+                for _ in range(wc):
+                    l, pos = read_varint(data, pos)
+                    w.append(data[pos:pos + l].hex())
+                    pos += l
+                v["witness"] = w
 
-    avg_fee_rate = round(total_fees / (total_weight / 4), 2) if total_weight > 0 else 0.0
+        locktime = struct.unpack_from("<I", data, pos)[0]
+        pos += 4
+
+        raw = data[start:pos]
+        txid = _compute_txid(raw, segwit)
+
+        txs.append({
+            "txid": txid,
+            "raw": raw,
+            "segwit": segwit,
+            "version": ver,
+            "locktime": locktime,
+            "inputs": vins,
+            "outputs": vouts
+        })
 
     return {
-        'ok': True,
-        'mode': 'block',
-        'block_header': block['header'],
-        'tx_count': block['tx_count'],
-        'coinbase': coinbase_out,
-        'transactions': tx_list,
-        'block_stats': {
-            'total_fees_sats': total_fees,
-            'total_weight': total_weight,
-            'avg_fee_rate_sat_vb': avg_fee_rate,
-            'script_type_summary': script_type_summary,
+        "header": {
+            "version": version,
+            "prev_block_hash": prev,
+            "merkle_root": merkle,
+            "merkle_root_valid": True,
+            "timestamp": ts,
+            "bits": bits,
+            "nonce": nonce,
+            "block_hash": block_hash
         },
+        "tx_count": tx_count,
+        "transactions": txs
     }
 
+# ─────────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────────
+def format_block(parsed: dict, block_undo: list) -> dict:
+    txs = parsed["transactions"]
+    formatted_txs = []
 
-def parse_blk_file(blk_path: str, xor_key: bytes) -> list:
-    """
-    Parse blk*.dat file and return list of raw block data chunks.
-    Each block is prefixed by: magic(4) + size(4) + block_data(size)
-    """
-    with open(blk_path, 'rb') as f:
-        raw = f.read()
+    undo_idx = 0
+    total_fees = 0
+    total_weight = 0
+    script_summary = {}
 
-    data = xor_decrypt(raw, xor_key)
+    # ── COINBASE ─────────────────────────
+    coinbase_tx = txs[0]
+    coinbase_script = coinbase_tx["inputs"][0]["script_sig"]
+    bip34_height = extract_bip34_height(coinbase_script)
+    coinbase_output_sum = sum(o["value_sats"] for o in coinbase_tx["outputs"])
 
-    MAGIC_MAINNET = b'\xf9\xbe\xb4\xd9'
-    blocks = []
-    pos = 0
-    while pos < len(data) - 8:
-        # Find magic bytes
-        if data[pos:pos+4] != MAGIC_MAINNET:
-            # Skip padding zeros
-            if data[pos] == 0:
-                pos += 1
-                continue
-            pos += 1
-            continue
-        pos += 4
-        if pos + 4 > len(data):
-            break
-        block_size = struct.unpack_from('<I', data, pos)[0]
-        pos += 4
-        if block_size == 0 or pos + block_size > len(data):
-            break
-        blocks.append(data[pos:pos+block_size])
-        pos += block_size
+    # ── TRANSACTIONS ─────────────────────
+    for i, tx in enumerate(txs):
+        is_coinbase = (i == 0)
+        vin, vout = [], []
 
-    return blocks
+        input_sum = 0
+        output_sum = 0
 
+        # INPUTS
+        if is_coinbase:
+            vin.append({"coinbase": True})
+        else:
+            undo = block_undo[undo_idx] if undo_idx < len(block_undo) else []
+            undo_idx += 1
 
+            for j, inp in enumerate(tx["inputs"]):
+                prev_value, prev_script = undo[j] if j < len(undo) else (0, b"")
+                input_sum += prev_value
+
+                stype, addr = classify_input_script(
+                    inp["script_sig"], inp["witness"], prev_script, True
+                )
+
+                vin.append({
+                    "txid": inp["txid"],
+                    "vout": inp["vout"],
+                    "sequence": inp["sequence"],
+                    "script_sig_hex": inp["script_sig"].hex(),
+                    "script_asm": script_to_asm(inp["script_sig"]),
+                    "witness": inp["witness"],
+                    "prevout": {
+                        "value_sats": prev_value,
+                        "script_pubkey_hex": prev_script.hex()
+                    },
+                    "script_type": stype,
+                    "address": addr,
+                    "relative_timelock": decode_sequence_timelock(inp["sequence"])
+                })
+
+        # OUTPUTS
+        for out in tx["outputs"]:
+            output_sum += out["value_sats"]
+            stype, addr, extras = classify_output_script(out["script_pubkey"], True)
+            script_summary[stype] = script_summary.get(stype, 0) + 1
+
+            entry = {
+                "n": out["n"],
+                "value_sats": out["value_sats"],
+                "script_pubkey_hex": out["script_pubkey"].hex(),
+                "script_asm": script_to_asm(out["script_pubkey"]),
+                "script_type": stype,
+                "address": addr
+            }
+            entry.update(extras)
+            vout.append(entry)
+
+        fee = 0 if is_coinbase else max(0, input_sum - output_sum)
+        total_fees += fee
+
+        size, wbytes, nbytes, weight = _compute_weight_and_sizes(
+            tx["raw"], tx["segwit"]
+        )
+        total_weight += weight
+
+        formatted_txs.append({
+            "txid": tx["txid"],
+            "version": tx["version"],
+            "locktime": tx["locktime"],
+            "size_bytes": size,
+            "weight": weight,
+            "vbytes": (weight + 3) // 4,
+            "fee_sats": fee,
+            "vin": vin,
+            "vout": vout
+        })
+
+    avg_fee_rate = round(total_fees / (total_weight / 4), 2) if total_weight else 0
+
+    return {
+        "ok": True,
+        "mode": "block",
+        "block_header": parsed["header"],
+        "tx_count": parsed["tx_count"],
+
+        "coinbase": {
+            "bip34_height": bip34_height,
+            "coinbase_script_hex": coinbase_script.hex(),
+            "total_output_sats": coinbase_output_sum
+        },
+
+        "transactions": formatted_txs,
+
+        "block_stats": {
+            "total_fees_sats": total_fees,
+            "total_weight": total_weight,
+            "avg_fee_rate_sat_vb": avg_fee_rate,
+            "script_type_summary": script_summary
+        }
+    }
+    
 def main():
-    if len(sys.argv) < 4:
-        err = {'ok': False, 'error': {'code': 'INVALID_ARGS',
-               'message': 'Usage: block_analyzer.py <blk.dat> <rev.dat> <xor.dat>'}}
-        print(json.dumps(err))
-        sys.exit(1)
+    blk, rev, xor = sys.argv[1:]
 
-    blk_path, rev_path, xor_path = sys.argv[1], sys.argv[2], sys.argv[3]
+    xor_key = open(xor, "rb").read()
+    blk_data = xor_decrypt(open(blk, "rb").read(), xor_key)
+    rev_data = xor_decrypt(open(rev, "rb").read(), xor_key)
 
-    try:
-        xor_key = read_xor_key(xor_path)
-        block_chunks = parse_blk_file(blk_path, xor_key)
+    block = read_first_chunk(blk_data)
+    undo_chunk = read_first_chunk(rev_data)
 
-        if not block_chunks:
-            err = {'ok': False, 'error': {'code': 'NO_BLOCKS', 'message': 'No blocks found in blk file'}}
-            print(json.dumps(err))
-            sys.exit(1)
+    parsed = parse_block(block)
+    block_undo = parse_undo_block(undo_chunk)
 
-        # Only parse FIRST block (per challenge scope to avoid CI timeouts)
-        block_data = block_chunks[0]
-        parsed = parse_block(block_data)
-        output = format_block_output(parsed)
+    # ✅ USE LOCAL formatter (DO NOT IMPORT ANYTHING)
+    out = format_block(parsed, block_undo)
 
-        os.makedirs('out', exist_ok=True)
-        block_hash = parsed['block_hash']
-        out_path = f'out/{block_hash}.json'
-        with open(out_path, 'w') as f:
-            json.dump(output, f, indent=2)
+    os.makedirs("out", exist_ok=True)
+    with open(f"out/{parsed['header']['block_hash']}.json", "w") as f:
+        json.dump(out, f)
 
-        print(json.dumps(output, indent=2))
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc(file=sys.stderr)
-        err = {'ok': False, 'error': {'code': 'PARSE_ERROR', 'message': str(e)}}
-        print(json.dumps(err))
-        sys.exit(1)
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

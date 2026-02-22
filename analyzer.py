@@ -10,6 +10,7 @@ import hashlib
 import struct
 import math
 import os
+from functools import lru_cache
 
 
 # ---------------------------------------------------------------------------
@@ -18,6 +19,7 @@ import os
 
 CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
 
+@lru_cache(maxsize=8192)
 def _bech32_polymod(values):
     GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]
     chk = 1
@@ -49,7 +51,7 @@ def _convertbits(data, frombits, tobits, pad=True):
 def _bech32_encode(hrp, data, spec):
     combined = data + [0, 0, 0, 0, 0, 0]
     const = 0x2bc830a3 if spec == "bech32m" else 1
-    polymod = _bech32_polymod(_bech32_hrp_expand(hrp) + combined) ^ const
+    polymod = _bech32_polymod(tuple(_bech32_hrp_expand(hrp) + combined)) ^ const
     checksum = [(polymod >> 5 * (5 - i)) & 31 for i in range(6)]
     return hrp + '1' + ''.join([CHARSET[d] for d in data + checksum])
 
@@ -73,6 +75,7 @@ def _sha256d(data: bytes) -> bytes:
 
 _B58 = b'123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 
+@lru_cache(maxsize=4096)
 def _base58check(payload: bytes) -> str:
     checksum = _sha256d(payload)[:4]
     data = payload + checksum
@@ -93,18 +96,23 @@ def _base58check(payload: bytes) -> str:
 # Address encoding
 # ---------------------------------------------------------------------------
 
+@lru_cache(maxsize=8192)
 def _p2pkh_addr(pkh: bytes, mainnet=True) -> str:
     return _base58check((b'\x00' if mainnet else b'\x6f') + pkh)
 
+@lru_cache(maxsize=8192)
 def _p2sh_addr(sh: bytes, mainnet=True) -> str:
     return _base58check((b'\x05' if mainnet else b'\xc4') + sh)
 
+@lru_cache(maxsize=8192)
 def _p2wpkh_addr(pkh: bytes, mainnet=True) -> str:
     return encode_segwit_address('bc' if mainnet else 'tb', 0, list(pkh))
 
+@lru_cache(maxsize=8192)
 def _p2wsh_addr(sh: bytes, mainnet=True) -> str:
     return encode_segwit_address('bc' if mainnet else 'tb', 0, list(sh))
 
+@lru_cache(maxsize=8192)
 def _p2tr_addr(xpk: bytes, mainnet=True) -> str:
     return encode_segwit_address('bc' if mainnet else 'tb', 1, list(xpk))
 
@@ -128,6 +136,7 @@ _OP_NAMES = {
     0xb1: 'OP_CHECKLOCKTIMEVERIFY', 0xb2: 'OP_CHECKSEQUENCEVERIFY',
 }
 
+@lru_cache(maxsize=16384)
 def script_to_asm(script: bytes) -> str:
     if not script:
         return ''
@@ -138,18 +147,25 @@ def script_to_asm(script: bytes) -> str:
             op = script[i]; i += 1
             if 0x01 <= op <= 0x4b:
                 data = script[i:i+op]; i += op
+                parts.append(f'OP_PUSHBYTES_{op}')
                 parts.append(data.hex())
             elif op == 0x4c:
                 n = script[i]; i += 1
+                parts.append('OP_PUSHDATA1')
                 parts.append(script[i:i+n].hex()); i += n
             elif op == 0x4d:
                 n = struct.unpack_from('<H', script, i)[0]; i += 2
+                parts.append('OP_PUSHDATA2')
                 parts.append(script[i:i+n].hex()); i += n
             elif op == 0x4e:
                 n = struct.unpack_from('<I', script, i)[0]; i += 4
+                parts.append('OP_PUSHDATA4')
                 parts.append(script[i:i+n].hex()); i += n
             else:
-                parts.append(_OP_NAMES.get(op, f'OP_{op}'))
+                name = _OP_NAMES.get(op)
+                if name is None:
+                    name = f'OP_UNKNOWN_0x{op:02X}'
+                parts.append(name)
     except Exception:
         pass
     return ' '.join(parts)
@@ -164,22 +180,40 @@ def classify_output_script(script: bytes, mainnet: bool):
     if n >= 1 and script[0] == 0x6a:
         raw_data = script[1:]
         op_data = b''
-        if raw_data:
-            first = raw_data[0]
-            if 0x01 <= first <= 0x4b and len(raw_data) >= first + 1:
-                op_data = raw_data[1:first+1]
-            elif first == 0x4c and len(raw_data) >= 2:
-                op_data = raw_data[2:2+raw_data[1]]
+        # Concatenate all push data after OP_RETURN
+        pos = 0
+        while pos < len(raw_data):
+            b = raw_data[pos]
+            if 0x01 <= b <= 0x4b:
+                pos += 1
+                op_data += raw_data[pos:pos+b]; pos += b
+            elif b == 0x4c:
+                pos += 1
+                if pos < len(raw_data):
+                    l = raw_data[pos]; pos += 1
+                    op_data += raw_data[pos:pos+l]; pos += l
+            elif b == 0x4d:
+                pos += 1
+                if pos + 2 <= len(raw_data):
+                    l = struct.unpack_from('<H', raw_data, pos)[0]; pos += 2
+                    op_data += raw_data[pos:pos+l]; pos += l
+            elif b == 0x4e:
+                pos += 1
+                if pos + 4 <= len(raw_data):
+                    l = struct.unpack_from('<I', raw_data, pos)[0]; pos += 4
+                    op_data += raw_data[pos:pos+l]; pos += l
+            elif b == 0x00:
+                pos += 1  # OP_0, pushes empty bytes
             else:
-                op_data = raw_data
+                break  # non-push opcode or end
         extras['op_return_data_hex'] = op_data.hex()
         try:
             extras['op_return_data_utf8'] = op_data.decode('utf-8')
         except Exception:
             extras['op_return_data_utf8'] = None
-        if op_data[:2] in (b'om', b'\x6f\x6d'):
+        if op_data[:4] == b'omni' or op_data[:4] == b'\x6f\x6d\x6e\x69':
             extras['op_return_protocol'] = 'omni'
-        elif len(op_data) > 8 and op_data[0] == 0x08:
+        elif len(op_data) >= 5 and op_data[:5] == bytes([0x01, 0x09, 0xf9, 0x11, 0x02]):
             extras['op_return_protocol'] = 'opentimestamps'
         else:
             extras['op_return_protocol'] = 'unknown'

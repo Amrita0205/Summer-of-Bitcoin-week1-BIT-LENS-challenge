@@ -2,1581 +2,857 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chain Lens — Bitcoin Transaction Autopsy</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Chain Lens — Bitcoin Visualizer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=Syne:wght@400;600;800&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
 <style>
+/* ── Variables ── */
 :root {
-  --bg:       #080a0c;
-  --bg2:      #0d1117;
-  --bg3:      #111820;
-  --border:   #1e2d3d;
-  --border2:  #2a3f56;
-  --amber:    #f5a623;
-  --amber2:   #ffd280;
-  --amber-dim:#7a5210;
-  --green:    #00e5a0;
-  --green2:   #00b87a;
-  --green-dim:#003d2a;
-  --red:      #ff4d6a;
-  --red-dim:  #4a0f1a;
-  --blue:     #38b6ff;
-  --blue-dim: #0a2540;
-  --purple:   #a78bfa;
-  --text:     #c8d8e8;
-  --text2:    #6b8aaa;
-  --text3:    #3a5570;
-  --mono:     'Syne Mono', monospace;
-  --sans:     'Syne', sans-serif;
-  --data:     'DM Mono', monospace;
+  --bg:      #06080b;
+  --bg2:     #0c1018;
+  --bg3:     #111820;
+  --bg4:     #18232e;
+  --border:  #1c2d3e;
+  --border2: #263d54;
+  --amber:   #f5a623;
+  --amber2:  #ffd280;
+  --adim:    #7a4f0d;
+  --green:   #00d4aa;
+  --gdim:    #003d30;
+  --red:     #ff4d6a;
+  --rdim:    #3d0a14;
+  --blue:    #38b6ff;
+  --bdim:    #082440;
+  --purple:  #c084fc;
+  --pdim:    #2e1060;
+  --text:    #c8dae8;
+  --text2:   #5e7a90;
+  --text3:   #2e4556;
+  --mono:    'Space Mono', monospace;
+  --sans:    'Outfit', sans-serif;
 }
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-html { scroll-behavior: smooth; }
-
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--sans);
-  min-height: 100vh;
-  overflow-x: hidden;
-}
-
-/* ── Grain overlay ── */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: 1000;
-  opacity: 0.4;
-}
+/* grain */
+body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");pointer-events:none;z-index:999}
 
 /* ── Header ── */
-header {
-  border-bottom: 1px solid var(--border);
-  padding: 18px 40px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: rgba(8,10,12,0.92);
-  backdrop-filter: blur(12px);
+header{
+  position:sticky;top:0;z-index:100;
+  background:rgba(6,8,11,.92);backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+  padding:14px 32px;display:flex;align-items:center;justify-content:space-between;
 }
+.logo{display:flex;align-items:center;gap:10px}
+.logo-hex{
+  width:34px;height:34px;background:var(--amber);
+  clip-path:polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%);
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;animation:hex-pulse 3s ease-in-out infinite;
+}
+@keyframes hex-pulse{0%,100%{box-shadow:0 0 0 0 rgba(245,166,35,.5)}50%{box-shadow:0 0 0 8px rgba(245,166,35,0)}}
+.logo-name{font-family:var(--mono);font-size:17px;color:var(--amber);letter-spacing:.04em}
+.logo-tag{font-size:10px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;font-family:var(--mono)}
+.status{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--text3)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+/* ── Main ── */
+.wrap{max-width:1160px;margin:0 auto;padding:36px 20px}
 
-.logo-icon {
-  width: 32px; height: 32px;
-  background: var(--amber);
-  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px;
-  animation: pulse-amber 3s ease-in-out infinite;
+/* ── Two panel input ── */
+.input-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:22px;transition:border-color .2s}
+.card:hover{border-color:var(--border2)}
+.card-label{font-family:var(--mono);font-size:10px;color:var(--amber);letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.card-label::before{content:'';display:inline-block;width:3px;height:3px;border-radius:50%;background:var(--amber)}
+textarea{
+  width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;
+  color:var(--text);font-family:var(--mono);font-size:11px;padding:12px;
+  resize:vertical;min-height:130px;outline:none;line-height:1.7;
+  transition:border-color .2s,box-shadow .2s;
 }
+textarea:focus{border-color:var(--adim);box-shadow:0 0 0 3px rgba(245,166,35,.08)}
+textarea::placeholder{color:var(--text3)}
+.btn-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.btn{font-family:var(--mono);font-size:11px;letter-spacing:.08em;padding:8px 18px;border-radius:5px;border:none;cursor:pointer;transition:all .15s;text-transform:uppercase}
+.btn-p{background:#f7931a;color:#000;font-weight:700}
+.btn-p:hover{background:#ffad44;transform:translateY(-1px);box-shadow:0 4px 18px rgba(247,147,26,.4)}
+.btn-g{background:transparent;color:var(--text2);border:1px solid var(--border2)}
+.btn-g:hover{border-color:var(--text2);color:var(--text)}
+.btn-d{background:transparent;color:var(--red);border:1px solid var(--rdim)}
+.btn-d:hover{background:var(--rdim)}
 
-@keyframes pulse-amber {
-  0%,100% { box-shadow: 0 0 0 0 rgba(245,166,35,0.4); }
-  50%      { box-shadow: 0 0 0 8px rgba(245,166,35,0); }
-}
+.drop-zone{border:1px dashed var(--border2);border-radius:6px;padding:18px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:10px}
+.drop-zone:hover,.drop-zone.over{border-color:var(--adim);background:rgba(245,166,35,.03)}
+.drop-label{font-family:var(--mono);font-size:11px;color:var(--text3);line-height:2}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px}
+.chip{font-family:var(--mono);font-size:10px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:3px 9px;color:var(--text2)}
+.chip.ok{border-color:var(--gdim);color:var(--green)}
 
-.logo-text { font-family: var(--mono); font-size: 18px; color: var(--amber); letter-spacing: 0.05em; }
-.logo-sub  { font-size: 11px; color: var(--text3); font-family: var(--data); letter-spacing: 0.1em; text-transform: uppercase; }
-
-.status-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--green); box-shadow: 0 0 8px var(--green);
-  animation: blink 2s step-end infinite;
-}
-@keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
-
-/* ── Layout ── */
-.main { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
-
-/* ── Input zone ── */
-.input-zone {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 32px;
-  animation: fadeUp 0.5s ease;
-}
-
-@keyframes fadeUp {
-  from { opacity:0; transform: translateY(16px); }
-  to   { opacity:1; transform: translateY(0); }
-}
-
-.panel {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 24px;
-  transition: border-color 0.2s;
-}
-.panel:hover { border-color: var(--border2); }
-
-.panel-title {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--amber);
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.panel-title::before {
-  content: '';
-  display: inline-block;
-  width: 4px; height: 4px;
-  background: var(--amber);
-  border-radius: 50%;
-}
-
-textarea {
-  width: 100%;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-family: var(--data);
-  font-size: 12px;
-  padding: 12px;
-  resize: vertical;
-  min-height: 140px;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  line-height: 1.6;
-}
-textarea:focus {
-  border-color: var(--amber-dim);
-  box-shadow: 0 0 0 2px rgba(245,166,35,0.1);
-}
-textarea::placeholder { color: var(--text3); }
-
-.btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
-
-.btn {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  padding: 9px 20px;
-  border-radius: 5px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s;
-  text-transform: uppercase;
-}
-.btn-primary {
-  background: var(--amber);
-  color: #000;
-  font-weight: 600;
-}
-.btn-primary:hover { background: var(--amber2); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(245,166,35,0.3); }
-.btn-primary:active { transform: translateY(0); }
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text2);
-  border: 1px solid var(--border2);
-}
-.btn-ghost:hover { border-color: var(--text2); color: var(--text); }
-
-.btn-danger {
-  background: transparent;
-  color: var(--red);
-  border: 1px solid var(--red-dim);
-}
-.btn-danger:hover { background: var(--red-dim); }
-
-.file-upload-area {
-  border: 1px dashed var(--border2);
-  border-radius: 6px;
-  padding: 20px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: 12px;
-}
-.file-upload-area:hover { border-color: var(--amber-dim); background: rgba(245,166,35,0.03); }
-.file-upload-area.dragover { border-color: var(--amber); background: rgba(245,166,35,0.06); }
-
-.file-row {
-  display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;
-}
-.file-chip {
-  font-family: var(--data);
-  font-size: 11px;
-  background: var(--bg3);
-  border: 1px solid var(--border2);
-  border-radius: 4px;
-  padding: 4px 10px;
-  color: var(--text2);
-}
-.file-chip.ready { border-color: var(--green-dim); color: var(--green); }
-
-/* ── Loading ── */
-.loading {
-  display: none;
-  text-align: center;
-  padding: 60px;
-}
-.loading.show { display: block; }
-.loader {
-  width: 40px; height: 40px;
-  border: 2px solid var(--border2);
-  border-top-color: var(--amber);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto 16px;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-.loading-text { font-family: var(--mono); color: var(--text2); font-size: 13px; letter-spacing: 0.1em; }
-
-/* ── Error banner ── */
-.error-banner {
-  display: none;
-  background: var(--red-dim);
-  border: 1px solid var(--red);
-  border-radius: 6px;
-  padding: 14px 18px;
-  font-family: var(--data);
-  font-size: 13px;
-  color: var(--red);
-  margin-bottom: 24px;
-}
-.error-banner.show { display: block; }
+/* ── Loading / error ── */
+.loading{display:none;text-align:center;padding:50px}
+.loading.show{display:block}
+.spin{width:36px;height:36px;border:2px solid var(--border2);border-top-color:var(--amber);border-radius:50%;animation:spin .75s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-txt{font-family:var(--mono);color:var(--text2);font-size:12px;letter-spacing:.1em}
+.err{display:none;background:var(--rdim);border:1px solid var(--red);border-radius:8px;padding:13px 18px;font-family:var(--mono);font-size:12px;color:var(--red);margin-bottom:22px}
+.err.show{display:block}
 
 /* ── Results ── */
-#results { display: none; animation: fadeUp 0.6s ease; }
-#results.show { display: block; }
+#results{display:none;animation:fadeup .5s ease}
+#results.show{display:block}
+@keyframes fadeup{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
-/* ── Story bar ── */
-.story-bar {
-  display: flex;
-  gap: 0;
-  margin-bottom: 32px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-}
+/* ── Story tabs ── */
+.story-tabs{display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:28px}
+.stab{flex:1;padding:16px 14px;border-right:1px solid var(--border);cursor:pointer;transition:background .18s;position:relative}
+.stab:last-child{border-right:none}
+.stab:hover{background:rgba(245,166,35,.04)}
+.stab.active{background:rgba(245,166,35,.07)}
+.stab.active::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--amber)}
+.stab-num{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.15em;text-transform:uppercase;margin-bottom:5px}
+.stab-name{font-size:13px;font-weight:600}
 
-.story-step {
-  flex: 1;
-  padding: 18px 20px;
-  border-right: 1px solid var(--border);
-  cursor: pointer;
-  transition: background 0.2s;
-  position: relative;
-}
-.story-step:last-child { border-right: none; }
-.story-step:hover { background: rgba(245,166,35,0.04); }
-.story-step.active { background: rgba(245,166,35,0.07); }
-.story-step.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 2px;
-  background: var(--amber);
-}
+/* ── Stats grid ── */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:18px;animation:fadeup .4s ease both}
+.stat:nth-child(1){animation-delay:.04s}.stat:nth-child(2){animation-delay:.08s}
+.stat:nth-child(3){animation-delay:.12s}.stat:nth-child(4){animation-delay:.16s}
+.stat:hover{border-color:var(--border2)}
+.stat-lbl{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:9px}
+.stat-val{font-family:var(--mono);font-size:21px;color:var(--amber);line-height:1;margin-bottom:5px}
+.stat-sub{font-size:11px;color:var(--text2)}
 
-.step-num {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--text3);
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  margin-bottom: 6px;
-}
-.step-label {
-  font-family: var(--sans);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
+/* ── TXID box ── */
+.txid-box{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:18px 22px;margin-bottom:22px}
+.txid-top{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.txid-lbl{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px}
+.txid-val{font-family:var(--mono);font-size:12px;color:var(--text2);word-break:break-all;line-height:1.6}
+.txid-val em{color:var(--amber);font-style:normal}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.badge{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:9px;letter-spacing:.1em;padding:3px 8px;border-radius:3px;text-transform:uppercase;white-space:nowrap}
+.b-green{background:var(--gdim);color:var(--green);border:1px solid rgba(0,212,170,.15)}
+.b-amber{background:rgba(245,166,35,.1);color:var(--amber);border:1px solid rgba(245,166,35,.15)}
+.b-red  {background:var(--rdim);color:var(--red);border:1px solid rgba(255,77,106,.15)}
+.b-blue {background:var(--bdim);color:var(--blue);border:1px solid rgba(56,182,255,.15)}
+.b-gray {background:rgba(255,255,255,.04);color:var(--text2);border:1px solid var(--border)}
+.b-purp {background:var(--pdim);color:var(--purple);border:1px solid rgba(192,132,252,.15)}
 
-/* ── Sections ── */
-.section { margin-bottom: 28px; }
-
-.section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.section-title {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--amber);
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  display: flex; align-items: center; gap: 8px;
-}
-.section-title::before {
-  content: '//';
-  color: var(--text3);
-}
-
-/* ── Summary cards ── */
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 28px;
-}
-
-.stat-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 20px;
-  transition: border-color 0.2s, transform 0.2s;
-  animation: fadeUp 0.5s ease both;
-}
-.stat-card:nth-child(1) { animation-delay: 0.05s; }
-.stat-card:nth-child(2) { animation-delay: 0.1s; }
-.stat-card:nth-child(3) { animation-delay: 0.15s; }
-.stat-card:nth-child(4) { animation-delay: 0.2s; }
-.stat-card:hover { border-color: var(--border2); transform: translateY(-2px); }
-
-.stat-label {
-  font-family: var(--data);
-  font-size: 11px;
-  color: var(--text3);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-}
-.stat-value {
-  font-family: var(--mono);
-  font-size: 22px;
-  color: var(--amber);
-  line-height: 1;
-  margin-bottom: 6px;
-}
-.stat-sub {
-  font-family: var(--data);
-  font-size: 11px;
-  color: var(--text2);
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  padding: 3px 8px;
-  border-radius: 3px;
-  text-transform: uppercase;
-}
-.badge-green { background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,229,160,0.2); }
-.badge-amber { background: rgba(245,166,35,0.12); color: var(--amber); border: 1px solid rgba(245,166,35,0.2); }
-.badge-red   { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,77,106,0.2); }
-.badge-blue  { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(56,182,255,0.2); }
-.badge-gray  { background: rgba(255,255,255,0.04); color: var(--text2); border: 1px solid var(--border); }
-.badge-purple{ background: rgba(167,139,250,0.1); color: var(--purple); border: 1px solid rgba(167,139,250,0.2); }
-
-/* ── TXID display ── */
-.txid-box {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 20px 24px;
-  margin-bottom: 28px;
-  font-family: var(--data);
-  font-size: 13px;
-}
-.txid-label { color: var(--text3); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px; }
-.txid-val   { color: var(--text2); word-break: break-all; line-height: 1.6; }
-.txid-val span { color: var(--amber); }
-.txid-row   { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
-.txid-badges{ display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+/* ── Plain English ── */
+.plain{background:linear-gradient(135deg,rgba(245,166,35,.05),rgba(0,212,170,.03));border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:18px 22px;margin-bottom:22px;font-size:14px;line-height:1.85;color:var(--text)}
+.plain strong{color:var(--amber)}
+.plain em{color:var(--green);font-style:normal;font-family:var(--mono)}
 
 /* ── Flow diagram ── */
-.flow-container {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 32px 24px;
-  margin-bottom: 28px;
-  position: relative;
-  overflow: hidden;
-}
+.flow{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:26px;margin-bottom:22px}
+.flow-title{font-family:var(--mono);font-size:10px;color:var(--amber);letter-spacing:.14em;text-transform:uppercase;margin-bottom:20px}
+.flow-inner{display:grid;grid-template-columns:1fr 56px 1fr;gap:0;align-items:start}
+.flow-col-hd{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;text-align:center}
+.fnode{background:var(--bg3);border-radius:6px;padding:11px 14px;border-left:3px solid var(--blue);margin-bottom:8px;animation:fadeup .4s ease both}
+.fnode.out{border-left-color:var(--green)}
+.fnode.fee{border-left-color:var(--red);opacity:.75}
+.fnode.opr{border-left-color:var(--text3)}
+.fnode-lbl{font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:3px}
+.fnode-addr{font-family:var(--mono);font-size:10px;color:var(--text2);word-break:break-all;margin:3px 0}
+.fnode-val{font-family:var(--mono);font-size:13px;color:var(--amber);margin-top:4px}
+.flow-mid{display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:34px;gap:3px}
+.arrow-txt{font-size:22px;color:var(--amber)}
+.arrow-sub{font-family:var(--mono);font-size:9px;color:var(--text3);text-align:center;letter-spacing:.08em}
 
-.flow-title {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--amber);
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  margin-bottom: 24px;
-}
+/* ── Fee section ── */
+.fee-section{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:22px;margin-bottom:22px}
+.sec-title{font-family:var(--mono);font-size:10px;color:var(--amber);letter-spacing:.14em;text-transform:uppercase;margin-bottom:16px}
+.fee-bar-wrap{margin:14px 0}
+.fee-bar-legend{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:6px}
+.fee-bar-track{height:26px;background:var(--bg3);border-radius:4px;overflow:hidden;display:flex}
+.fee-bar-out{background:linear-gradient(90deg,var(--gdim),var(--green));height:100%;display:flex;align-items:center;padding:0 8px;transition:width .9s cubic-bezier(.4,0,.2,1)}
+.fee-bar-fee{background:linear-gradient(90deg,var(--adim),var(--amber));height:100%;display:flex;align-items:center;padding:0 7px;transition:width .9s ease}
+.bar-lbl{font-family:var(--mono);font-size:9px;color:#000;font-weight:700;white-space:nowrap}
+.fee-meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px}
+.fee-meta-item{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)}
+.dot-sq{width:9px;height:9px;border-radius:2px}
+.rate-wrap{margin-top:18px}
+.rate-lbl{font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:5px}
+.rate-track{height:7px;background:var(--bg3);border-radius:4px;position:relative;overflow:visible;margin-bottom:5px}
+.rate-fill{height:100%;border-radius:4px;transition:width 1s ease}
+.rate-ptr{position:absolute;top:-4px;width:2px;height:15px;background:var(--amber);transform:translateX(-50%)}
+.rate-range{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--text3)}
+.size-row{display:flex;gap:22px;flex-wrap:wrap;margin-top:16px}
+.size-item{font-size:12px;color:var(--text2)}
+.size-item strong{color:var(--text)}
 
-.flow-layout {
-  display: grid;
-  grid-template-columns: 1fr 80px 1fr;
-  gap: 0;
-  align-items: center;
-}
+/* ── SegWit vis ── */
+.segwit-vis{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:22px;margin-bottom:22px}
+.sw-desc{font-size:13px;color:var(--text2);line-height:1.75;margin:10px 0 20px}
+.sw-desc strong{color:var(--green)}
+.bars-row{display:flex;gap:28px;align-items:flex-end;margin:16px 0 10px}
+.bar-wrap{flex:1;text-align:center}
+.bar-col{border-radius:4px 4px 0 0;position:relative;margin-bottom:6px;min-height:20px}
+.bar-lbl2{font-size:11px;color:var(--text2)}
+.bar-val{font-family:var(--mono);font-size:15px;margin-top:3px}
+.savings-badge{display:inline-flex;align-items:center;gap:6px;background:var(--gdim);color:var(--green);border:1px solid rgba(0,212,170,.2);border-radius:6px;padding:6px 14px;font-family:var(--mono);font-size:12px;margin-top:8px}
+.sw-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px}
 
-.flow-col-title {
-  font-family: var(--data);
-  font-size: 10px;
-  color: var(--text3);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  margin-bottom: 12px;
-  text-align: center;
-}
-
-.flow-inputs, .flow-outputs { display: flex; flex-direction: column; gap: 10px; }
-
-.flow-node {
-  background: var(--bg3);
-  border-radius: 6px;
-  padding: 12px 16px;
-  border-left: 3px solid var(--blue);
-  animation: slideIn 0.4s ease both;
-}
-.flow-node.output { border-left-color: var(--green); }
-.flow-node.fee-node { border-left-color: var(--red); opacity: 0.7; }
-.flow-node.opreturn { border-left-color: var(--text3); }
-
-@keyframes slideIn {
-  from { opacity:0; transform: translateX(-10px); }
-  to   { opacity:1; transform: translateX(0); }
-}
-
-.flow-node-label {
-  font-family: var(--data);
-  font-size: 10px;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 4px;
-}
-.flow-node-type {
-  font-family: var(--mono);
-  font-size: 11px;
-  margin-bottom: 4px;
-}
-.flow-node-addr {
-  font-family: var(--data);
-  font-size: 11px;
-  color: var(--text2);
-  word-break: break-all;
-}
-.flow-node-val {
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--amber);
-  margin-top: 6px;
-}
-
-.flow-arrows {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-
-.flow-svg {
-  width: 80px;
-  overflow: visible;
-}
-
-/* ── Fee bar ── */
-.fee-breakdown {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 24px;
-  margin-bottom: 28px;
-}
-
-.fee-bar-wrap { margin: 20px 0 12px; }
-.fee-bar-track {
-  height: 28px;
-  background: var(--bg3);
-  border-radius: 4px;
-  overflow: hidden;
-  display: flex;
-}
-.fee-bar-out {
-  background: linear-gradient(90deg, var(--green2), var(--green));
-  height: 100%;
-  transition: width 1s cubic-bezier(0.4,0,0.2,1);
-  display: flex; align-items: center;
-  padding: 0 10px;
-}
-.fee-bar-fee {
-  background: linear-gradient(90deg, var(--amber-dim), var(--amber));
-  height: 100%;
-  transition: width 1s cubic-bezier(0.4,0,0.2,1);
-  display: flex; align-items: center;
-  padding: 0 8px;
-}
-.fee-bar-label {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: #000;
-  white-space: nowrap;
-  font-weight: 600;
-}
-.fee-legend { display: flex; gap: 20px; flex-wrap: wrap; }
-.fee-legend-item { display: flex; align-items: center; gap: 8px; font-family: var(--data); font-size: 12px; color: var(--text2); }
-.fee-legend-dot { width: 10px; height: 10px; border-radius: 2px; }
-
-/* ── Rate meter ── */
-.rate-meter { margin-top: 20px; }
-.rate-track {
-  height: 8px;
-  background: var(--bg3);
-  border-radius: 4px;
-  position: relative;
-  overflow: visible;
-  margin: 8px 0 16px;
-}
-.rate-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 1s ease;
-}
-.rate-labels { display: flex; justify-content: space-between; font-family: var(--data); font-size: 10px; color: var(--text3); }
-.rate-pointer {
-  position: absolute;
-  top: -4px;
-  width: 2px; height: 16px;
-  background: var(--amber);
-  transform: translateX(-50%);
-}
-
-/* ── Inputs / Outputs grid ── */
-.io-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
-
-.io-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  animation: fadeUp 0.5s ease both;
-}
-
-.io-card-header {
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.io-card-title {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.io-items { padding: 0; }
-.io-item {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
-  transition: background 0.15s;
-}
-.io-item:last-child { border-bottom: none; }
-.io-item:hover { background: rgba(255,255,255,0.02); }
-
-.io-item-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.io-item-num { font-family: var(--mono); font-size: 11px; color: var(--text3); }
-.io-item-val { font-family: var(--mono); font-size: 14px; color: var(--amber); }
-
-.io-item-addr {
-  font-family: var(--data);
-  font-size: 11px;
-  color: var(--text2);
-  word-break: break-all;
-  margin-bottom: 8px;
-}
-.io-item-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-
-/* ── Witness expand ── */
-.witness-toggle {
-  font-family: var(--data);
-  font-size: 11px;
-  color: var(--text3);
-  cursor: pointer;
-  border: none;
-  background: none;
-  padding: 0;
-  text-decoration: underline dotted;
-}
-.witness-toggle:hover { color: var(--text2); }
-.witness-data {
-  display: none;
-  margin-top: 8px;
-  background: var(--bg3);
-  border-radius: 4px;
-  padding: 10px;
-  font-family: var(--data);
-  font-size: 11px;
-  color: var(--text2);
-  word-break: break-all;
-  line-height: 1.8;
-}
-.witness-data.open { display: block; }
-
-/* ── Tech details ── */
-.tech-section {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-bottom: 28px;
-  overflow: hidden;
-}
-.tech-toggle {
-  width: 100%;
-  background: none;
-  border: none;
-  padding: 16px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  color: var(--text2);
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  transition: background 0.15s;
-  text-align: left;
-}
-.tech-toggle:hover { background: rgba(255,255,255,0.02); }
-.tech-toggle-arrow { transition: transform 0.2s; }
-.tech-toggle.open .tech-toggle-arrow { transform: rotate(180deg); }
-.tech-body { display: none; padding: 20px; border-top: 1px solid var(--border); }
-.tech-body.open { display: block; }
-
-.hex-block {
-  background: var(--bg3);
-  border-radius: 4px;
-  padding: 14px;
-  font-family: var(--data);
-  font-size: 11px;
-  color: var(--text2);
-  word-break: break-all;
-  line-height: 2;
-  margin-bottom: 10px;
-}
-
-.kv-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-.kv-table tr { border-bottom: 1px solid var(--border); }
-.kv-table tr:last-child { border-bottom: none; }
-.kv-table td { padding: 8px 12px; font-family: var(--data); font-size: 12px; }
-.kv-table td:first-child { color: var(--text3); width: 40%; }
-.kv-table td:last-child  { color: var(--text); word-break: break-all; }
+/* ── IO grid ── */
+.io-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px}
+.io-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden;animation:fadeup .4s ease both}
+.io-card-hd{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.io-card-title{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+.io-card-sub{font-family:var(--mono);font-size:10px;color:var(--text3)}
+.io-item{padding:14px 18px;border-bottom:1px solid var(--border);transition:background .15s}
+.io-item:last-child{border-bottom:none}
+.io-item:hover{background:rgba(255,255,255,.02)}
+.io-item-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.io-num{font-family:var(--mono);font-size:10px;color:var(--text3)}
+.io-val{font-family:var(--mono);font-size:13px;color:var(--amber)}
+.io-addr{font-family:var(--mono);font-size:10px;color:var(--text2);word-break:break-all;margin-bottom:7px}
+.io-meta{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.wit-toggle{font-family:var(--mono);font-size:10px;color:var(--text3);cursor:pointer;background:none;border:none;padding:0;text-decoration:underline dotted}
+.wit-toggle:hover{color:var(--text2)}
+.wit-data{display:none;margin-top:7px;background:var(--bg3);border-radius:4px;padding:9px;font-family:var(--mono);font-size:10px;color:var(--text2);word-break:break-all;line-height:1.8}
+.wit-data.open{display:block}
+.wit-idx{color:var(--text3);margin-bottom:2px}
 
 /* ── Warnings ── */
-.warnings-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+.warn-list{margin-bottom:22px}
+.warn-card{background:var(--rdim);border:1px solid rgba(255,77,106,.25);border-radius:8px;padding:14px 18px;display:flex;gap:12px;margin-bottom:10px;animation:fadeup .4s ease}
+.warn-icon{font-size:18px;flex-shrink:0;margin-top:1px}
+.warn-code{font-family:var(--mono);font-size:12px;color:var(--red);font-weight:700;margin-bottom:3px}
+.warn-msg{font-size:12px;color:var(--text2);line-height:1.6}
+.warn-why{font-size:11px;color:var(--text3);margin-top:5px;font-style:italic}
+.no-warn{background:var(--gdim);border:1px solid rgba(0,212,170,.2);border-radius:8px;padding:14px 18px;font-family:var(--mono);font-size:12px;color:var(--green);margin-bottom:22px}
 
-.warning-card {
-  background: var(--red-dim);
-  border: 1px solid rgba(255,77,106,0.3);
-  border-radius: 8px;
-  padding: 16px 20px;
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  animation: fadeUp 0.4s ease;
-}
-.warning-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
-.warning-code { font-family: var(--mono); font-size: 13px; color: var(--red); font-weight: 600; margin-bottom: 4px; }
-.warning-msg  { font-family: var(--data); font-size: 12px; color: var(--text2); line-height: 1.6; }
-.warning-explain { font-family: var(--data); font-size: 12px; color: var(--text3); margin-top: 6px; font-style: italic; }
+/* ── Tech details ── */
+.tech{background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:22px;overflow:hidden}
+.tech-btn{width:100%;background:none;border:none;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:var(--text2);font-family:var(--mono);font-size:11px;transition:background .15s;text-align:left}
+.tech-btn:hover{background:rgba(255,255,255,.02)}
+.tech-arr{transition:transform .2s}
+.tech-btn.open .tech-arr{transform:rotate(180deg)}
+.tech-body{display:none;padding:18px;border-top:1px solid var(--border)}
+.tech-body.open{display:block}
+.hex-box{background:var(--bg3);border-radius:4px;padding:12px;font-family:var(--mono);font-size:10px;color:var(--text2);word-break:break-all;line-height:1.9;margin-bottom:8px}
+.kv{width:100%;border-collapse:collapse;margin-bottom:14px}
+.kv tr{border-bottom:1px solid var(--border)}
+.kv tr:last-child{border-bottom:none}
+.kv td{padding:7px 10px;font-family:var(--mono);font-size:11px}
+.kv td:first-child{color:var(--text3);width:38%}
+.kv td:last-child{color:var(--text);word-break:break-all}
 
-/* ── Segwit savings ── */
-.segwit-vis {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 24px;
-  margin-bottom: 28px;
-}
+/* ── Block mode ── */
+.block-hdr{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:18px}
+.block-hash-val{font-family:var(--mono);font-size:11px;color:var(--text2);word-break:break-all;margin:7px 0 14px}
+.block-hash-val em{color:var(--amber);font-style:normal}
+.dist-bar{display:grid;gap:8px}
+.dist-row{display:flex;align-items:center;gap:10px}
+.dist-row-name{width:110px;flex-shrink:0}
+.dist-track{flex:1;height:5px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.dist-fill{height:100%;border-radius:3px;transition:width .9s ease}
+.dist-cnt{font-family:var(--mono);font-size:10px;color:var(--text3);width:40px;text-align:right;flex-shrink:0}
+.tx-list{margin-bottom:22px}
+.tx-row{background:var(--bg2);border:1px solid var(--border);border-radius:6px;margin-bottom:6px;overflow:hidden;transition:border-color .2s}
+.tx-row:hover{border-color:var(--border2)}
+.tx-row-hd{padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.tx-row-idx{font-family:var(--mono);font-size:10px;color:var(--text3);width:28px;flex-shrink:0}
+.tx-row-id{font-family:var(--mono);font-size:11px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tx-row-fee{font-family:var(--mono);font-size:11px;color:var(--amber);white-space:nowrap}
+.tx-row-arr{color:var(--text3);font-size:11px;transition:transform .2s}
+.tx-row-body{display:none;border-top:1px solid var(--border);padding:14px 16px}
+.tx-row-body.open{display:block}
 
-.weight-bars { display: flex; gap: 24px; align-items: flex-end; margin: 20px 0; }
-.weight-bar-wrap { flex: 1; text-align: center; }
-.weight-bar {
-  background: var(--bg3);
-  border-radius: 4px 4px 0 0;
-  position: relative;
-  margin-bottom: 8px;
-  transition: height 1s cubic-bezier(0.4,0,0.2,1);
-  overflow: hidden;
-}
-.weight-bar-fill {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  border-radius: 4px 4px 0 0;
-  transition: height 1s ease;
-}
-.weight-bar-label { font-family: var(--data); font-size: 11px; color: var(--text2); }
-.weight-bar-val   { font-family: var(--mono); font-size: 16px; color: var(--amber); margin-top: 4px; }
-.savings-arrow { font-size: 24px; color: var(--green); margin-bottom: 24px; }
+/* Tooltip */
+[data-tip]{position:relative;cursor:help;border-bottom:1px dotted var(--text3)}
+[data-tip]::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:7px 11px;font-family:var(--mono);font-size:10px;color:var(--text);white-space:pre-wrap;max-width:230px;min-width:130px;text-align:left;pointer-events:none;opacity:0;transition:opacity .15s;z-index:50;line-height:1.5}
+[data-tip]:hover::after{opacity:1}
 
-/* ── Block view ── */
-.block-header-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 24px;
-  margin-bottom: 20px;
-}
-.block-hash {
-  font-family: var(--data);
-  font-size: 12px;
-  color: var(--text2);
-  word-break: break-all;
-  margin: 8px 0 16px;
-}
-.block-hash span { color: var(--amber); }
+/* Divider */
+hr{border:none;border-top:1px solid var(--border);margin:22px 0}
 
-.tx-list { margin-bottom: 28px; }
-.tx-row {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  margin-bottom: 8px;
-  overflow: hidden;
-  transition: border-color 0.2s;
+/* Responsive */
+@media(max-width:900px){
+  .input-grid{grid-template-columns:1fr}
+  .stats{grid-template-columns:1fr 1fr}
+  .io-grid{grid-template-columns:1fr}
+  .flow-inner{grid-template-columns:1fr}
+  .story-tabs{flex-direction:column}
 }
-.tx-row:hover { border-color: var(--border2); }
-.tx-row-head {
-  padding: 14px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  gap: 12px;
+@media(max-width:600px){
+  .stats{grid-template-columns:1fr}
+  header{padding:12px 16px}
+  .wrap{padding:20px 12px}
 }
-.tx-row-txid { font-family: var(--data); font-size: 12px; color: var(--text2); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tx-row-fee  { font-family: var(--mono); font-size: 12px; color: var(--amber); white-space: nowrap; }
-.tx-row-body { display: none; border-top: 1px solid var(--border); padding: 16px 20px; }
-.tx-row-body.open { display: block; }
-
-/* ── Tooltip ── */
-[data-tip] { position: relative; cursor: help; border-bottom: 1px dotted var(--text3); }
-[data-tip]::after {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg3);
-  border: 1px solid var(--border2);
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-family: var(--data);
-  font-size: 11px;
-  color: var(--text);
-  white-space: pre-wrap;
-  max-width: 240px;
-  min-width: 140px;
-  text-align: left;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s;
-  z-index: 50;
-  line-height: 1.5;
-}
-[data-tip]:hover::after { opacity: 1; }
-
-/* ── Responsive ── */
-@media (max-width: 900px) {
-  .input-zone    { grid-template-columns: 1fr; }
-  .summary-grid  { grid-template-columns: 1fr 1fr; }
-  .io-grid       { grid-template-columns: 1fr; }
-  .flow-layout   { grid-template-columns: 1fr; }
-  .story-bar     { flex-direction: column; }
-}
-
-@media (max-width: 600px) {
-  .summary-grid  { grid-template-columns: 1fr; }
-  header { padding: 14px 16px; }
-  .main  { padding: 24px 14px; }
-}
-
-.divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
-
-.plain-english {
-  background: linear-gradient(135deg, rgba(245,166,35,0.05), rgba(0,229,160,0.03));
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--amber);
-  border-radius: 8px;
-  padding: 20px 24px;
-  margin-bottom: 28px;
-  font-family: var(--data);
-  font-size: 14px;
-  line-height: 1.8;
-  color: var(--text);
-}
-.plain-english strong { color: var(--amber); font-family: var(--sans); }
-.plain-english em     { color: var(--green); font-style: normal; font-family: var(--mono); }
 </style>
 </head>
 <body>
 
 <header>
   <div class="logo">
-    <div class="logo-icon">⛓</div>
+    <img src="https://upload.wikimedia.org/wikipedia/commons/4/46/Bitcoin.svg" width="38" height="38" alt="Bitcoin" style="display:block">
     <div>
-      <div class="logo-text">CHAIN&nbsp;LENS</div>
-      <div class="logo-sub">Bitcoin Transaction Autopsy</div>
+      <div class="logo-name">CHAIN LENS</div>
+      <div class="logo-tag">Bitcoin Transaction Autopsy</div>
     </div>
   </div>
-  <div style="display:flex;align-items:center;gap:10px;">
-    <div class="status-dot" id="statusDot"></div>
-    <span style="font-family:var(--data);font-size:11px;color:var(--text3)" id="statusLabel">connecting…</span>
+  <div class="status">
+    <div class="dot" id="dot"></div>
+    <span id="status-txt">connecting…</span>
   </div>
 </header>
 
-<div class="main">
+<div class="wrap">
 
-  <!-- Input zone -->
-  <div class="input-zone">
-    <div class="panel">
-      <div class="panel-title">Transaction Fixture</div>
-      <textarea id="fixtureInput" placeholder='{"network":"mainnet","raw_tx":"0200...","prevouts":[...]}'></textarea>
+  <!-- Input panels -->
+  <div class="input-grid">
+    <div class="card">
+      <div class="card-label">Transaction Fixture</div>
+      <textarea id="fix" placeholder='Paste fixture JSON here:&#10;{&#10;  "network": "mainnet",&#10;  "raw_tx": "0200...",&#10;  "prevouts": [...]&#10;}'></textarea>
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="analyze()">⚡ Analyze</button>
-        <button class="btn btn-ghost" onclick="loadExample()">Load Example</button>
-        <button class="btn btn-danger" onclick="clearAll()">Clear</button>
+        <button class="btn btn-p" onclick="analyze()">ANALYZE TX</button>
+        <button class="btn btn-g" onclick="loadEx()">Load Example</button>
+        <button class="btn btn-d" onclick="clearAll()">Clear</button>
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-title">Block Mode (optional)</div>
-      <div class="file-upload-area" id="dropZone" onclick="document.getElementById('blockFiles').click()">
-        <div style="font-family:var(--data);font-size:12px;color:var(--text3);margin-bottom:6px">
-          Drop blk*.dat, rev*.dat, xor.dat here
-        </div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:0.1em">OR CLICK TO BROWSE</div>
+    <div class="card">
+      <div class="card-label">Block Mode — Upload Files</div>
+      <div class="drop-zone" id="dz" onclick="document.getElementById('bfiles').click()">
+        <div class="drop-label">Drop blk*.dat + rev*.dat + xor.dat here<br>or click to browse</div>
       </div>
-      <input type="file" id="blockFiles" multiple accept=".dat" style="display:none" onchange="handleBlockFiles(this.files)">
-      <div class="file-row" id="fileChips"></div>
+      <input type="file" id="bfiles" multiple accept=".dat" style="display:none" onchange="handleFiles(this.files)">
+      <div class="chips" id="chips"></div>
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="analyzeBlock()">🧱 Analyze Block</button>
+        <button class="btn btn-p" onclick="analyzeBlock()">ANALYZE BLOCK</button>
       </div>
-      <div style="font-family:var(--data);font-size:11px;color:var(--text3);margin-top:12px;line-height:1.6">
-        Upload all three files (blk*.dat, rev*.dat, xor.dat) then click Analyze Block
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:10px;line-height:1.8">
+        Need all 3 files: blk*.dat, rev*.dat, xor.dat
       </div>
     </div>
   </div>
 
   <!-- Error -->
-  <div class="error-banner" id="errorBanner"></div>
+  <div class="err" id="err"></div>
 
   <!-- Loading -->
   <div class="loading" id="loading">
-    <div class="loader"></div>
-    <div class="loading-text">DECODING TRANSACTION…</div>
+    <div class="spin"></div>
+    <div class="loading-txt">DECODING…</div>
   </div>
 
   <!-- Results -->
   <div id="results">
-    <!-- Story bar -->
-    <div class="story-bar" id="storyBar">
-      <div class="story-step active" data-step="0" onclick="scrollToSection('summary')">
-        <div class="step-num">01 — What happened</div>
-        <div class="step-label">Transaction Overview</div>
-      </div>
-      <div class="story-step" data-step="1" onclick="scrollToSection('flow')">
-        <div class="step-num">02 — Who paid whom</div>
-        <div class="step-label">Value Flow</div>
-      </div>
-      <div class="story-step" data-step="2" onclick="scrollToSection('cost')">
-        <div class="step-num">03 — What did it cost</div>
-        <div class="step-label">Fees & Size</div>
-      </div>
-      <div class="story-step" data-step="3" onclick="scrollToSection('risks')">
-        <div class="step-num">04 — Any risks?</div>
-        <div class="step-label">Warnings & Flags</div>
-      </div>
+    <div class="story-tabs">
+      <div class="stab active" onclick="goSec('sum')"><div class="stab-num">01</div><div class="stab-name">What happened</div></div>
+      <div class="stab" onclick="goSec('flow')"><div class="stab-num">02</div><div class="stab-name">Who paid whom</div></div>
+      <div class="stab" onclick="goSec('cost')"><div class="stab-num">03</div><div class="stab-name">What it cost</div></div>
+      <div class="stab" onclick="goSec('risk')"><div class="stab-num">04</div><div class="stab-name">Any risks?</div></div>
     </div>
-
-    <!-- Rendered content injected here -->
-    <div id="renderTarget"></div>
+    <div id="rt"></div>
   </div>
 
 </div>
 
 <script>
-// ── Globals ──────────────────────────────────────────────────────────────────
-let blockFileMap = {};
+/* ── State ── */
+let blockFiles = {};
 
-// ── Health check ─────────────────────────────────────────────────────────────
-async function checkHealth() {
+/* ── Health ── */
+(async () => {
   try {
     const r = await fetch('/api/health');
     const d = await r.json();
     if (d.ok) {
-      document.getElementById('statusDot').style.background = 'var(--green)';
-      document.getElementById('statusDot').style.boxShadow = '0 0 8px var(--green)';
-      document.getElementById('statusLabel').textContent = 'system online';
+      document.getElementById('dot').style.cssText = 'background:var(--green);box-shadow:0 0 6px var(--green)';
+      document.getElementById('status-txt').textContent = 'system online';
     }
-  } catch(e) {
-    document.getElementById('statusLabel').textContent = 'offline';
-    document.getElementById('statusDot').style.background = 'var(--red)';
-  }
-}
-checkHealth();
+  } catch { document.getElementById('status-txt').textContent = 'offline'; }
+})();
 
-// ── Example fixture ───────────────────────────────────────────────────────────
-const EXAMPLE = {
-  "network": "mainnet",
-  "raw_tx": "0200000001111111111111111111111111111111111111111111111111111111111111111100000000000000000002b00400000000000019a914010101010101010101010101010101010101010188ac0000000000000000096a08736f622d32303236",
-  "prevouts": [{"txid":"1111111111111111111111111111111111111111111111111111111111111111","vout":0,"value_sats":2000,"script_pubkey_hex":"76a914020202020202020202020202020202020202020288ac"}]
-};
-
-function loadExample() {
-  document.getElementById('fixtureInput').value = JSON.stringify(EXAMPLE, null, 2);
-}
-
+/* ── Example ── */
+const EX = {"network":"mainnet","raw_tx":"0200000001111111111111111111111111111111111111111111111111111111111111111100000000000000000002b00400000000000019a914010101010101010101010101010101010101010188ac0000000000000000096a08736f622d32303236","prevouts":[{"txid":"1111111111111111111111111111111111111111111111111111111111111111","vout":0,"value_sats":2000,"script_pubkey_hex":"76a914020202020202020202020202020202020202020288ac"}]};
+function loadEx() { document.getElementById('fix').value = JSON.stringify(EX, null, 2); }
 function clearAll() {
-  document.getElementById('fixtureInput').value = '';
+  document.getElementById('fix').value = '';
   document.getElementById('results').classList.remove('show');
-  document.getElementById('errorBanner').classList.remove('show');
-  blockFileMap = {};
-  document.getElementById('fileChips').innerHTML = '';
+  hideErr(); blockFiles = {}; document.getElementById('chips').innerHTML = '';
 }
 
-// ── Block file handling ───────────────────────────────────────────────────────
-function handleBlockFiles(files) {
-  for (const f of files) {
-    blockFileMap[f.name] = f;
-  }
-  renderFileChips();
+/* ── File upload ── */
+function handleFiles(files) {
+  for (const f of files) blockFiles[f.name] = f;
+  renderChips();
 }
-
-function renderFileChips() {
-  const chip = document.getElementById('fileChips');
-  chip.innerHTML = '';
-  for (const name of Object.keys(blockFileMap)) {
-    const el = document.createElement('div');
-    el.className = 'file-chip ready';
-    el.textContent = '✓ ' + name;
-    chip.appendChild(el);
-  }
+function renderChips() {
+  document.getElementById('chips').innerHTML = Object.keys(blockFiles)
+    .map(n => '<span class="chip ok">✓ ' + n + '</span>').join('');
 }
+const dz = document.getElementById('dz');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); handleFiles(e.dataTransfer.files); });
 
-// Setup drag-drop
-const dz = document.getElementById('dropZone');
-dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
-dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
-dz.addEventListener('drop', e => {
-  e.preventDefault();
-  dz.classList.remove('dragover');
-  handleBlockFiles(e.dataTransfer.files);
-});
-
-// ── Show/hide helpers ─────────────────────────────────────────────────────────
+/* ── UI helpers ── */
 function showLoading()  { document.getElementById('loading').classList.add('show'); }
 function hideLoading()  { document.getElementById('loading').classList.remove('show'); }
-function showError(msg) {
-  const el = document.getElementById('errorBanner');
-  el.textContent = '⚠ ' + msg;
-  el.classList.add('show');
-}
-function hideError()    { document.getElementById('errorBanner').classList.remove('show'); }
+function showErr(msg)   { const e = document.getElementById('err'); e.textContent = '⚠ ' + msg; e.classList.add('show'); }
+function hideErr()      { document.getElementById('err').classList.remove('show'); }
 function showResults()  { document.getElementById('results').classList.add('show'); }
+function goSec(id)      { const el = document.getElementById('s-' + id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
-function scrollToSection(id) {
-  const el = document.getElementById('sec-' + id);
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-// ── Analyze transaction ───────────────────────────────────────────────────────
+/* ── Analyze transaction ── */
 async function analyze() {
-  hideError();
-  const raw = document.getElementById('fixtureInput').value.trim();
-  if (!raw) { showError('Paste a fixture JSON first.'); return; }
-
+  hideErr();
+  const raw = document.getElementById('fix').value.trim();
+  if (!raw) { showErr('Paste a fixture JSON first.'); return; }
   let payload;
-  try { payload = JSON.parse(raw); }
-  catch(e) { showError('Invalid JSON: ' + e.message); return; }
-
+  try { payload = JSON.parse(raw); } catch(e) { showErr('Invalid JSON: ' + e.message); return; }
   showLoading();
   try {
-    const r = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await r.json();
+    const r = await fetch('/api/analyze', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const d = await r.json();
     hideLoading();
-    if (!data.ok) {
-      showError((data.error && data.error.message) || 'Analysis failed');
-      return;
-    }
-    renderTx(data);
+    if (!d.ok) { showErr((d.error && d.error.message) || 'Analysis failed'); return; }
+    document.getElementById('rt').innerHTML = renderTx(d);
     showResults();
-  } catch(e) {
-    hideLoading();
-    showError('Network error: ' + e.message);
-  }
+    // Update tabs to show tx mode
+    document.querySelectorAll('.stab').forEach((el,i) => {
+      el.querySelector('.stab-name').textContent = ['What happened','Who paid whom','What it cost','Any risks?'][i];
+    });
+  } catch(e) { hideLoading(); showErr('Network error: ' + e.message); }
 }
 
-// ── Analyze block ─────────────────────────────────────────────────────────────
+/* ── Analyze block ── */
 async function analyzeBlock() {
-  hideError();
-  const names = Object.keys(blockFileMap);
-  if (names.length < 3) { showError('Upload all 3 files: blk*.dat, rev*.dat, xor.dat'); return; }
-
+  hideErr();
+  if (Object.keys(blockFiles).length < 3) { showErr('Upload all 3 files: blk*.dat, rev*.dat, xor.dat'); return; }
   const fd = new FormData();
-  for (const [name, file] of Object.entries(blockFileMap)) {
-    fd.append(name, file, name);
-  }
-
+  for (const [name, file] of Object.entries(blockFiles)) fd.append(name, file, name);
   showLoading();
   try {
     const r = await fetch('/api/analyze-block', { method: 'POST', body: fd });
-    const data = await r.json();
+    const d = await r.json();
     hideLoading();
-    if (!data.ok) {
-      showError((data.error && data.error.message) || 'Block analysis failed');
-      return;
-    }
-    renderBlock(data);
+    if (!d.ok) { showErr((d.error && d.error.message) || 'Block analysis failed'); return; }
+    document.getElementById('rt').innerHTML = renderBlock(d);
     showResults();
-  } catch(e) {
-    hideLoading();
-    showError('Network error: ' + e.message);
-  }
+    document.querySelectorAll('.stab').forEach((el,i) => {
+      el.querySelector('.stab-name').textContent = ['Block Overview','Transactions','Stats','Coinbase'][i];
+    });
+  } catch(e) { hideLoading(); showErr('Network error: ' + e.message); }
 }
 
-// ── Formatters ────────────────────────────────────────────────────────────────
+/* ══════════════════════════════════════════
+   FORMATTERS
+══════════════════════════════════════════ */
 function fmtSats(n) {
   if (n === 0) return '<span style="color:var(--text3)">0 sats</span>';
-  if (n >= 100_000_000) {
-    return '<span style="color:var(--amber)">' + (n/1e8).toFixed(8) + ' BTC</span> <span style="color:var(--text3)">(' + n.toLocaleString() + ' sats)</span>';
-  }
+  if (n >= 1e8) return '<span style="color:var(--amber)">' + (n/1e8).toFixed(8) + ' BTC</span> <span style="color:var(--text3)">(' + n.toLocaleString() + ' sats)</span>';
   return '<span style="color:var(--amber)">' + n.toLocaleString() + '</span> <span style="color:var(--text3)">sats</span>';
 }
 
 function fmtAddr(addr, type) {
   if (!addr) return '<span style="color:var(--text3)">—</span>';
-  const colors = {
-    p2tr: 'var(--amber)', p2tr_keypath: 'var(--amber)', p2tr_scriptpath: 'var(--amber)',
-    p2wpkh: 'var(--green)', p2wsh: 'var(--green)',
-    p2sh: 'var(--purple)', 'p2sh-p2wpkh': 'var(--purple)', 'p2sh-p2wsh': 'var(--purple)',
-    p2pkh: 'var(--blue)'
-  };
-  const col = colors[type] || 'var(--text2)';
-  return '<span style="color:' + col + ';font-family:var(--data);word-break:break-all">' + addr + '</span>';
+  const c = {p2tr:'var(--amber)',p2tr_keypath:'var(--amber)',p2tr_scriptpath:'var(--amber)',p2wpkh:'var(--green)',p2wsh:'var(--green)',p2sh:'var(--purple)','p2sh-p2wpkh':'var(--purple)','p2sh-p2wsh':'var(--purple)',p2pkh:'var(--blue)'}[type] || 'var(--text2)';
+  return '<span style="color:'+c+';font-family:var(--mono);word-break:break-all;font-size:10px">' + addr + '</span>';
 }
 
-function scriptBadge(type) {
-  const map = {
-    p2pkh:          ['badge-blue',   'P2PKH'],
-    p2sh:           ['badge-purple', 'P2SH'],
-    p2wpkh:         ['badge-green',  'P2WPKH ⚡'],
-    p2wsh:          ['badge-green',  'P2WSH ⚡'],
-    p2tr:           ['badge-amber',  'P2TR ◆'],
-    p2tr_keypath:   ['badge-amber',  'P2TR Key ◆'],
-    p2tr_scriptpath:['badge-amber',  'P2TR Script'],
-    'p2sh-p2wpkh':  ['badge-purple', 'P2SH-P2WPKH'],
-    'p2sh-p2wsh':   ['badge-purple', 'P2SH-P2WSH'],
-    op_return:      ['badge-gray',   'OP_RETURN'],
-    unknown:        ['badge-red',    'UNKNOWN'],
+function scriptBadge(t) {
+  const m = {
+    p2pkh:['b-blue','P2PKH'],p2sh:['b-purp','P2SH'],
+    p2wpkh:['b-green','P2WPKH ⚡'],p2wsh:['b-green','P2WSH ⚡'],
+    p2tr:['b-amber','P2TR ◆'],p2tr_keypath:['b-amber','P2TR Key ◆'],p2tr_scriptpath:['b-amber','P2TR Script'],
+    'p2sh-p2wpkh':['b-purp','P2SH-P2WPKH'],'p2sh-p2wsh':['b-purp','P2SH-P2WSH'],
+    op_return:['b-gray','OP_RETURN'],unknown:['b-red','UNKNOWN'],coinbase:['b-amber','COINBASE'],
   };
-  const [cls, label] = map[type] || ['badge-gray', type];
-  return '<span class="badge ' + cls + '">' + label + '</span>';
+  const [cls, lbl] = m[t] || ['b-gray', t];
+  return '<span class="badge '+cls+'">' + lbl + '</span>';
 }
 
-function scriptTooltip(type) {
-  const tips = {
-    p2pkh:   'Pay-to-Public-Key-Hash.\nOldest address type (starts with 1).\nLarger and less efficient than newer types.',
-    p2sh:    'Pay-to-Script-Hash.\nAllows complex conditions like multisig.\nAddress starts with 3.',
-    p2wpkh:  'Pay-to-Witness-Public-Key-Hash.\nSegWit native — smaller, cheaper.\nAddress starts with bc1q.',
-    p2wsh:   'Pay-to-Witness-Script-Hash.\nSegWit version of P2SH — cheaper.\nStarts with bc1q.',
-    p2tr:    'Pay-to-Taproot (latest standard).\nMost private & efficient.\nAddress starts with bc1p.',
-    op_return:'Unspendable output used to\nembed arbitrary data on-chain.\nNo funds are locked here.',
-    unknown: 'Unrecognized script pattern.\nCould be non-standard or malformed.',
-  };
-  return tips[type] || '';
+function scriptTip(t) {
+  return {
+    p2pkh: 'Pay-to-Public-Key-Hash\nOldest Bitcoin address (starts 1)\nLarger, less efficient',
+    p2sh:  'Pay-to-Script-Hash\nAllows complex conditions e.g. multisig\nAddress starts with 3',
+    p2wpkh:'Native SegWit (starts bc1q)\nSmaller & cheaper than P2PKH\nWitness data discounted',
+    p2wsh: 'SegWit version of P2SH\nStarts bc1q — cheaper than P2SH',
+    p2tr:  'Taproot — most modern type\nMost private & efficient\nAddress starts bc1p',
+    op_return:'Unspendable output\nUsed to store data on-chain\nNo funds are locked here',
+    unknown:'Unrecognized script type\nMost wallets cannot spend it',
+  }[t] || '';
 }
 
 function warnExplain(code) {
-  const m = {
-    HIGH_FEE:             'The fee is unusually high — either over 1,000,000 sats or over 200 sat/vB. This may be a mistake or extremely urgent transaction.',
-    DUST_OUTPUT:          'An output is below 546 sats ("dust"). It costs more in fees to spend this output than it\'s worth. The network may reject it.',
-    RBF_SIGNALING:        'Replace-By-Fee: this transaction can be replaced with a higher-fee version before confirmation. It\'s not yet final in the mempool.',
-    UNKNOWN_OUTPUT_SCRIPT:'At least one output has a non-standard script. Most wallets won\'t be able to spend it.',
-  };
-  return m[code] || '';
+  return {
+    HIGH_FEE: 'Fee exceeds 1,000,000 sats or 200 sat/vB. May be a mistake or extremely urgent.',
+    DUST_OUTPUT: 'Output below 546 sats (dust). Costs more to spend than it\'s worth.',
+    RBF_SIGNALING: 'Can be replaced with higher-fee version before confirmation. Not yet final.',
+    UNKNOWN_OUTPUT_SCRIPT: 'Non-standard script — most wallets cannot spend it.',
+  }[code] || '';
 }
 
-// ── Plain-English story ───────────────────────────────────────────────────────
-function buildStory(d) {
-  const inCount  = d.vin.length;
-  const outCount = d.vout.length;
-  const fee      = d.fee_sats;
-  const rate     = d.fee_rate_sat_vb;
-  const isSegwit = d.segwit;
-  const rbf      = d.rbf_signaling;
-
-  let story = '';
-  story += 'This is a <strong>' + (isSegwit ? 'SegWit' : 'legacy') + ' Bitcoin transaction</strong> ';
-  story += 'that spends <strong>' + inCount + ' input' + (inCount>1?'s':'') + '</strong> ';
-  story += 'and creates <strong>' + outCount + ' output' + (outCount>1?'s':'') + '</strong>. ';
-
-  const totalIn  = d.total_input_sats;
-  const totalOut = d.total_output_sats;
-  story += 'A total of <em>' + totalIn.toLocaleString() + ' sats</em> came in, ';
-  story += '<em>' + totalOut.toLocaleString() + ' sats</em> went out, ';
-  story += 'and <em>' + fee.toLocaleString() + ' sats</em> were paid as a fee to miners ';
-  story += '(≈' + rate + ' sat per virtual byte). ';
-
-  if (rbf) story += '⚠ This transaction <strong>signals RBF</strong> — it can be replaced with a higher-fee version before it confirms. ';
-  if (d.locktime > 0) story += 'It has an <strong>absolute timelock</strong> of ' + d.locktime + ' (' + d.locktime_type + '). ';
-
-  return story;
+function pctBar(val, total, w, color) {
+  const p = total ? Math.min(val/total, 1) : 0;
+  const pct = (p*100).toFixed(1);
+  return '<div style="height:5px;background:var(--bg3);border-radius:3px;margin-top:4px"><div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:3px"></div></div>';
 }
 
-// ── Render full transaction ───────────────────────────────────────────────────
+/* ══════════════════════════════════════════
+   RENDER TRANSACTION
+══════════════════════════════════════════ */
 function renderTx(d) {
-  const rt = document.getElementById('renderTarget');
+  let h = '';
 
-  // 1. Plain-English summary
-  let html = '';
-  html += '<div id="sec-summary" class="plain-english">' + buildStory(d) + '</div>';
+  /* 1 — plain english */
+  h += '<div id="s-sum">';
+  h += '<div class="plain">' + buildStory(d) + '</div>';
+  h += '</div>';
 
-  // 2. Stat cards
-  html += '<div class="summary-grid">';
-  html += statCard('Fee', fmtSats(d.fee_sats), d.fee_rate_sat_vb + ' sat/vB', '');
-  html += statCard('Size', d.vbytes + ' vB', d.weight + ' weight units', '');
-  html += statCard('Inputs', d.vin.length, d.total_input_sats.toLocaleString() + ' sats in', '');
-  html += statCard('Outputs', d.vout.length, d.total_output_sats.toLocaleString() + ' sats out', '');
-  html += '</div>';
+  /* 2 — stat cards */
+  h += '<div class="stats">';
+  h += statCard('Fee', fmtSats(d.fee_sats), d.fee_rate_sat_vb + ' sat/vB');
+  h += statCard('Size', '<span style="font-family:var(--mono);color:var(--amber)">' + d.vbytes + '</span>', d.weight + ' WU · ' + d.size_bytes + ' B');
+  h += statCard('Inputs', d.vin.length, fmtSatsPlain(d.total_input_sats) + ' total in');
+  h += statCard('Outputs', d.vout.length, fmtSatsPlain(d.total_output_sats) + ' total out');
+  h += '</div>';
 
-  // 3. TXID box
-  html += '<div class="txid-box">';
-  html += '<div class="txid-row">';
-  html += '<div style="flex:1">';
-  html += '<div class="txid-label">Transaction ID (TXID)</div>';
-  html += '<div class="txid-val"><span>' + d.txid.slice(0,32) + '</span>' + d.txid.slice(32) + '</div>';
-  if (d.wtxid) {
-    html += '<div class="txid-label" style="margin-top:10px">Witness TXID (WTXID)</div>';
-    html += '<div class="txid-val" style="color:var(--text3)">' + d.wtxid + '</div>';
-  }
-  html += '</div></div>';
-  html += '<div class="txid-badges">';
-  html += '<span class="badge ' + (d.segwit ? 'badge-green' : 'badge-gray') + '">' + (d.segwit ? '⚡ SegWit' : 'Legacy') + '</span>';
-  html += '<span class="badge badge-blue">' + d.network + '</span>';
-  html += '<span class="badge badge-gray">v' + d.version + '</span>';
-  if (d.rbf_signaling) html += '<span class="badge badge-red" data-tip="This tx can be replaced before confirmation">RBF</span>';
-  if (d.locktime > 0)  html += '<span class="badge badge-amber" data-tip="Tx locked until block/time: ' + d.locktime + '">⏳ Locktime</span>';
-  html += '</div>';
-  html += '</div>';
+  /* 3 — TXID box */
+  h += '<div class="txid-box">';
+  h += '<div class="txid-top">';
+  h += '<div style="flex:1">';
+  h += '<div class="txid-lbl">Transaction ID (TXID)</div>';
+  h += '<div class="txid-val"><em>' + d.txid.slice(0,32) + '</em>' + d.txid.slice(32) + '</div>';
+  if (d.wtxid) { h += '<div class="txid-lbl" style="margin-top:10px">Witness TXID (WTXID) <span data-tip="For SegWit txs the WTXID commits to witness data too. TXID does not.">ⓘ</span></div>'; h += '<div class="txid-val" style="color:var(--text3)">' + d.wtxid + '</div>'; }
+  h += '</div></div>';
+  h += '<div class="badges">';
+  h += '<span class="badge ' + (d.segwit?'b-green':'b-gray') + '">' + (d.segwit?'⚡ SegWit':'Legacy') + '</span>';
+  h += '<span class="badge b-blue">' + d.network + '</span>';
+  h += '<span class="badge b-gray">v' + d.version + '</span>';
+  if (d.rbf_signaling) h += '<span class="badge b-red" data-tip="Replace-By-Fee: tx can be replaced before confirmation">RBF</span>';
+  if (d.locktime > 0)  h += '<span class="badge b-amber" data-tip="Tx cannot be mined before this block/time: ' + d.locktime + '">⏳ Locktime</span>';
+  h += '</div>';
+  h += '</div>';
 
-  // 4. Flow diagram
-  html += '<div id="sec-flow" class="flow-container">';
-  html += '<div class="flow-title">// Value Flow Diagram</div>';
-  html += '<div style="display:flex;gap:24px;align-items:flex-start">';
-
-  // Inputs column
-  html += '<div style="flex:1">';
-  html += '<div class="flow-col-title">↙ Inputs</div>';
+  /* 4 — flow diagram */
+  h += '<div id="s-flow" class="flow">';
+  h += '<div class="flow-title">// Value Flow — Where Did the Bitcoin Go?</div>';
+  h += '<div class="flow-inner">';
+  // inputs
+  h += '<div><div class="flow-col-hd">↙ Inputs (spending)</div>';
   d.vin.forEach((inp, i) => {
-    const tip = scriptTooltip(inp.script_type);
-    const tipAttr = tip ? ' data-tip="' + tip.replace(/"/g, '&quot;') + '"' : '';
-    html += '<div class="flow-node" style="margin-bottom:10px;animation-delay:' + (i*0.07) + 's">';
-    html += '<div class="flow-node-label">Input #' + i + '</div>';
-    html += '<div class="flow-node-type"' + tipAttr + '>' + scriptBadge(inp.script_type) + '</div>';
-    if (inp.address) html += '<div class="flow-node-addr">' + inp.address + '</div>';
-    html += '<div class="flow-node-val">' + fmtSats(inp.prevout.value_sats) + '</div>';
-    html += '</div>';
+    const tip = scriptTip(inp.script_type);
+    h += '<div class="fnode" style="animation-delay:' + (i*.07) + 's">';
+    h += '<div class="fnode-lbl">Input #' + i + '</div>';
+    h += '<div style="margin-bottom:3px"' + (tip?' data-tip="'+tip.replace(/"/g,'&quot;')+'"':'') + '>' + scriptBadge(inp.script_type) + '</div>';
+    if (inp.address) h += '<div class="fnode-addr">' + inp.address + '</div>';
+    h += '<div class="fnode-val">' + fmtSats(inp.prevout.value_sats) + '</div>';
+    h += '</div>';
   });
-  html += '</div>';
-
-  // Arrow column
-  html += '<div style="display:flex;flex-direction:column;align-items:center;padding-top:36px;gap:4px">';
-  html += '<div style="font-size:24px;color:var(--amber)">→</div>';
-  html += '<div style="font-family:var(--data);font-size:10px;color:var(--text3);text-align:center;letter-spacing:0.08em">VALUE<br>FLOWS</div>';
-  html += '</div>';
-
-  // Outputs column
-  html += '<div style="flex:1">';
-  html += '<div class="flow-col-title">↗ Outputs</div>';
+  h += '</div>';
+  // arrow
+  h += '<div class="flow-mid"><div class="arrow-txt">→</div><div class="arrow-sub">VALUE<br>FLOWS</div></div>';
+  // outputs
+  h += '<div><div class="flow-col-hd">↗ Outputs (receiving)</div>';
   d.vout.forEach((out, i) => {
     const isDust = out.value_sats < 546 && out.script_type !== 'op_return';
-    const tip = scriptTooltip(out.script_type);
-    const tipAttr = tip ? ' data-tip="' + tip.replace(/"/g, '&quot;') + '"' : '';
-    let cls = 'flow-node output';
-    if (out.script_type === 'op_return') cls += ' opreturn';
-    html += '<div class="' + cls + '" style="margin-bottom:10px;animation-delay:' + (i*0.07) + 's">';
-    html += '<div class="flow-node-label">Output #' + out.n + '</div>';
-    html += '<div class="flow-node-type"' + tipAttr + '>' + scriptBadge(out.script_type);
-    if (isDust) html += ' <span class="badge badge-red">DUST</span>';
-    html += '</div>';
-    if (out.address) html += '<div class="flow-node-addr">' + out.address + '</div>';
-    if (out.op_return_data_utf8) html += '<div class="flow-node-addr" style="color:var(--amber)">"' + out.op_return_data_utf8 + '"</div>';
-    html += '<div class="flow-node-val">' + fmtSats(out.value_sats) + '</div>';
-    html += '</div>';
+    let cls = 'fnode out' + (out.script_type === 'op_return' ? ' opr' : '');
+    const tip = scriptTip(out.script_type);
+    h += '<div class="' + cls + '" style="animation-delay:' + (i*.07) + 's">';
+    h += '<div class="fnode-lbl">Output #' + out.n + '</div>';
+    h += '<div style="margin-bottom:3px"' + (tip?' data-tip="'+tip.replace(/"/g,'&quot;')+'"':'') + '>' + scriptBadge(out.script_type) + (isDust ? ' <span class="badge b-red">DUST</span>' : '') + '</div>';
+    if (out.address) h += '<div class="fnode-addr">' + out.address + '</div>';
+    if (out.op_return_data_utf8) h += '<div class="fnode-addr" style="color:var(--amber)">"' + out.op_return_data_utf8 + '"</div>';
+    h += '<div class="fnode-val">' + fmtSats(out.value_sats) + '</div>';
+    h += '</div>';
   });
-  // Fee as missing slice
-  html += '<div class="flow-node fee-node" style="margin-bottom:10px">';
-  html += '<div class="flow-node-label">⛏ Miner Fee</div>';
-  html += '<div class="flow-node-val" style="color:var(--amber)">' + fmtSats(d.fee_sats) + '</div>';
-  html += '<div style="font-family:var(--data);font-size:11px;color:var(--text3)">burned as transaction fee</div>';
-  html += '</div>';
-  html += '</div>';
+  // fee as missing slice
+  h += '<div class="fnode fee"><div class="fnode-lbl">⛏ Miner Fee (burned)</div>';
+  h += '<div class="fnode-val">' + fmtSats(d.fee_sats) + '</div>';
+  h += '<div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:3px">= Input − Output</div></div>';
+  h += '</div>';
+  h += '</div></div>'; // flow
 
-  html += '</div></div>'; // end flow
-
-  // 5. Fee breakdown section
-  html += '<div id="sec-cost" class="fee-breakdown">';
-  html += '<div class="section-title">// Fee & Cost Breakdown</div>';
-
-  const pct = d.total_input_sats > 0 ? (d.total_output_sats / d.total_input_sats * 100) : 0;
-  const feePct = 100 - pct;
-
-  html += '<div class="fee-bar-wrap">';
-  html += '<div style="display:flex;justify-content:space-between;font-family:var(--data);font-size:11px;color:var(--text3);margin-bottom:6px">';
-  html += '<span>Total Input: ' + d.total_input_sats.toLocaleString() + ' sats</span>';
-  html += '<span>' + feePct.toFixed(2) + '% fee</span>';
-  html += '</div>';
-  html += '<div class="fee-bar-track">';
-  html += '<div class="fee-bar-out" style="width:' + pct.toFixed(2) + '%"><span class="fee-bar-label">Output ' + pct.toFixed(1) + '%</span></div>';
-  html += '<div class="fee-bar-fee" style="width:' + feePct.toFixed(2) + '%"><span class="fee-bar-label">Fee</span></div>';
-  html += '</div></div>';
-
-  html += '<div class="fee-legend" style="margin-top:12px">';
-  html += '<div class="fee-legend-item"><div class="fee-legend-dot" style="background:var(--green)"></div>Sent to outputs: ' + d.total_output_sats.toLocaleString() + ' sats</div>';
-  html += '<div class="fee-legend-item"><div class="fee-legend-dot" style="background:var(--amber)"></div>Fee to miners: ' + d.fee_sats.toLocaleString() + ' sats</div>';
-  html += '</div>';
-
-  // Rate meter
+  /* 5 — fee section */
+  h += '<div id="s-cost" class="fee-section">';
+  h += '<div class="sec-title">// Fee & Cost Analysis</div>';
+  const tin = d.total_input_sats, tout = d.total_output_sats, fee = d.fee_sats;
+  const outPct = tin ? (tout/tin*100).toFixed(2) : 0;
+  const feePct = tin ? (fee/tin*100).toFixed(2) : 0;
+  h += '<div class="fee-bar-wrap">';
+  h += '<div class="fee-bar-legend"><span>Total input: ' + tin.toLocaleString() + ' sats</span><span>' + feePct + '% fee</span></div>';
+  h += '<div class="fee-bar-track">';
+  h += '<div class="fee-bar-out" style="width:' + outPct + '%"><span class="bar-lbl">Outputs ' + outPct + '%</span></div>';
+  h += '<div class="fee-bar-fee" style="width:' + feePct + '%"><span class="bar-lbl">Fee</span></div>';
+  h += '</div></div>';
+  h += '<div class="fee-meta">';
+  h += '<div class="fee-meta-item"><div class="dot-sq" style="background:var(--green)"></div>' + tout.toLocaleString() + ' sats out</div>';
+  h += '<div class="fee-meta-item"><div class="dot-sq" style="background:var(--amber)"></div>' + fee.toLocaleString() + ' sats fee</div>';
+  h += '</div>';
   const rate = d.fee_rate_sat_vb;
-  const rateCap = Math.min(rate, 200);
-  const rateColor = rate > 200 ? 'var(--red)' : rate > 50 ? 'var(--amber)' : rate > 10 ? 'var(--green2)' : 'var(--green)';
-  html += '<div class="rate-meter">';
-  html += '<div style="font-family:var(--data);font-size:11px;color:var(--text3);margin-bottom:4px">';
-  html += 'Fee Rate: <span style="color:' + rateColor + ';font-family:var(--mono)">' + rate + ' sat/vB</span>';
-  html += ' &nbsp;<span data-tip="Sat per virtual byte. Higher = confirms faster. Normal: 1–50 sat/vB. High: >100 sat/vB.">ⓘ</span>';
-  html += '</div>';
-  html += '<div class="rate-track">';
-  html += '<div class="rate-fill" style="width:' + (rateCap/200*100).toFixed(1) + '%;background:' + rateColor + '"></div>';
-  html += '<div class="rate-pointer" style="left:' + (rateCap/200*100).toFixed(1) + '%"></div>';
-  html += '</div>';
-  html += '<div class="rate-labels"><span>0</span><span>50</span><span>100</span><span>200+ sat/vB</span></div>';
-  html += '</div>';
+  const ratePct = Math.min(rate/200*100, 100).toFixed(1);
+  const rateCol = rate > 200 ? 'var(--red)' : rate > 50 ? 'var(--amber)' : rate > 10 ? 'var(--green)' : 'var(--green)';
+  h += '<div class="rate-wrap">';
+  h += '<div class="rate-lbl">Fee Rate: <span style="color:' + rateCol + ';font-family:var(--mono)">' + rate + ' <span data-tip="Satoshis per virtual byte. Higher = confirms faster. Normal: 1–50. High: >100.">sat/vB</span></span></div>';
+  h += '<div class="rate-track"><div class="rate-fill" style="width:' + ratePct + '%;background:' + rateCol + '"></div><div class="rate-ptr" style="left:' + ratePct + '%"></div></div>';
+  h += '<div class="rate-range"><span>0</span><span>50</span><span>100</span><span>200+</span></div>';
+  h += '</div>';
+  h += '<div class="size-row">';
+  h += '<div class="size-item"><span data-tip="Raw byte count of the transaction">Bytes</span>: <strong>' + d.size_bytes + ' B</strong></div>';
+  h += '<div class="size-item"><span data-tip="BIP141 weight: non-witness×4 + witness×1">Weight</span>: <strong>' + d.weight + ' WU</strong></div>';
+  h += '<div class="size-item"><span data-tip="Virtual bytes = weight ÷ 4. Used to calculate fees.">vBytes</span>: <strong>' + d.vbytes + ' vB</strong></div>';
+  h += '</div>';
+  h += '</div>'; // fee section
 
-  // Size breakdown
-  html += '<div style="margin-top:20px;display:flex;gap:24px;flex-wrap:wrap">';
-  html += '<div style="font-family:var(--data);font-size:12px;color:var(--text2)">';
-  html += '<span data-tip="Total bytes of the raw tx">Size</span>: <strong style="color:var(--text)">' + d.size_bytes + ' bytes</strong></div>';
-  html += '<div style="font-family:var(--data);font-size:12px;color:var(--text2)">';
-  html += '<span data-tip="BIP141 weight units. Witness data costs less.">Weight</span>: <strong style="color:var(--text)">' + d.weight + ' WU</strong></div>';
-  html += '<div style="font-family:var(--data);font-size:12px;color:var(--text2)">';
-  html += '<span data-tip="Virtual bytes = weight / 4. Used to calculate fee.">vBytes</span>: <strong style="color:var(--text)">' + d.vbytes + ' vB</strong></div>';
-  html += '</div>';
-  html += '</div>'; // fee breakdown
-
-  // 6. SegWit savings (if segwit)
+  /* 6 — SegWit savings */
   if (d.segwit && d.segwit_savings) {
     const ss = d.segwit_savings;
-    const legacyH = 120;
-    const actualH = Math.round(legacyH * ss.weight_actual / ss.weight_if_legacy);
-    html += '<div class="segwit-vis">';
-    html += '<div class="section-title">// SegWit Weight Savings</div>';
-    html += '<div style="font-family:var(--data);font-size:12px;color:var(--text2);margin-top:8px;line-height:1.8">';
-    html += 'SegWit moves witness data (signatures) outside the main tx body. ';
-    html += 'Witness bytes cost <strong style="color:var(--green)">¼ the weight</strong> of regular bytes, ';
-    html += 'making the effective size smaller and the fee lower.<br>';
-    html += 'This transaction saves <strong style="color:var(--amber)">' + ss.savings_pct + '%</strong> vs a hypothetical legacy equivalent.';
-    html += '</div>';
-    html += '<div class="weight-bars" style="margin-top:24px">';
-    // Legacy bar
-    html += '<div class="weight-bar-wrap">';
-    html += '<div class="weight-bar" style="height:' + legacyH + 'px">';
-    html += '<div class="weight-bar-fill" style="background:var(--red-dim);border:1px solid var(--red);height:100%;border-radius:4px 4px 0 0"></div>';
-    html += '</div>';
-    html += '<div class="weight-bar-label" style="color:var(--text3)">If Legacy</div>';
-    html += '<div class="weight-bar-val" style="color:var(--red)">' + ss.weight_if_legacy + ' WU</div>';
-    html += '</div>';
-    // Actual bar
-    html += '<div class="savings-arrow">↓ ' + ss.savings_pct + '% saved</div>';
-    html += '<div class="weight-bar-wrap">';
-    html += '<div class="weight-bar" style="height:' + actualH + 'px">';
-    html += '<div class="weight-bar-fill" style="background:var(--green-dim);border:1px solid var(--green);height:100%;border-radius:4px 4px 0 0"></div>';
-    html += '</div>';
-    html += '<div class="weight-bar-label" style="color:var(--text3)">Actual SegWit</div>';
-    html += '<div class="weight-bar-val" style="color:var(--green)">' + ss.weight_actual + ' WU</div>';
-    html += '</div>';
-    html += '</div>';
-    // Witness breakdown
-    html += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">';
-    html += '<div class="fee-legend-item"><div class="fee-legend-dot" style="background:var(--blue)"></div>Non-witness: ' + ss.non_witness_bytes + 'B</div>';
-    html += '<div class="fee-legend-item"><div class="fee-legend-dot" style="background:var(--green)"></div>Witness: ' + ss.witness_bytes + 'B (discounted)</div>';
-    html += '</div>';
-    html += '</div>';
+    const maxH = 100;
+    const actH = Math.round(maxH * ss.weight_actual / ss.weight_if_legacy);
+    h += '<div class="segwit-vis">';
+    h += '<div class="sec-title">// SegWit Discount Visualizer</div>';
+    h += '<div class="sw-desc">SegWit moves signature (witness) data to a separate section. Witness bytes are counted at <strong>¼ weight</strong>, making the transaction cheaper. This tx saves <strong>' + ss.savings_pct + '%</strong> vs a hypothetical legacy equivalent.</div>';
+    h += '<div class="bars-row">';
+    h += '<div class="bar-wrap">';
+    h += '<div class="bar-col" style="height:' + maxH + 'px;background:var(--rdim);border:1px solid rgba(255,77,106,.3)"></div>';
+    h += '<div class="bar-lbl2" style="color:var(--text3)">If Legacy</div>';
+    h += '<div class="bar-val" style="color:var(--red)">' + ss.weight_if_legacy + ' WU</div>';
+    h += '</div>';
+    h += '<div style="flex-shrink:0;align-self:center;font-size:22px;color:var(--green)">→<br><span style="font-size:12px;color:var(--green)">-' + ss.savings_pct + '%</span></div>';
+    h += '<div class="bar-wrap">';
+    h += '<div class="bar-col" style="height:' + actH + 'px;background:var(--gdim);border:1px solid rgba(0,212,170,.3)"></div>';
+    h += '<div class="bar-lbl2" style="color:var(--text3)">Actual SegWit</div>';
+    h += '<div class="bar-val" style="color:var(--green)">' + ss.weight_actual + ' WU</div>';
+    h += '</div></div>';
+    h += '<div class="sw-legend">';
+    h += '<div class="fee-meta-item"><div class="dot-sq" style="background:var(--blue)"></div>Non-witness: ' + ss.non_witness_bytes + ' B</div>';
+    h += '<div class="fee-meta-item"><div class="dot-sq" style="background:var(--green)"></div>Witness: ' + ss.witness_bytes + ' B (¼ weight discount)</div>';
+    h += '</div>';
+    h += '<div class="savings-badge" style="margin-top:14px">⚡ ' + ss.savings_pct + '% lighter than legacy equivalent</div>';
+    h += '</div>';
   }
 
-  // 7. Inputs / Outputs detail
-  html += '<div class="io-grid">';
-
+  /* 7 — I/O detail */
+  h += '<div class="io-grid">';
   // Inputs
-  html += '<div class="io-card" style="animation-delay:0.1s">';
-  html += '<div class="io-card-header">';
-  html += '<div class="io-card-title" style="color:var(--blue)">↙ Inputs (' + d.vin.length + ')</div>';
-  html += '<div style="font-family:var(--data);font-size:11px;color:var(--text3)">' + d.total_input_sats.toLocaleString() + ' sats</div>';
-  html += '</div><div class="io-items">';
+  h += '<div class="io-card">';
+  h += '<div class="io-card-hd"><div class="io-card-title" style="color:var(--blue)">↙ Inputs (' + d.vin.length + ')</div>';
+  h += '<div class="io-card-sub">' + d.total_input_sats.toLocaleString() + ' sats</div></div>';
   d.vin.forEach((inp, i) => {
-    html += '<div class="io-item">';
-    html += '<div class="io-item-top">';
-    html += '<span class="io-item-num">Input #' + i + '</span>';
-    html += '<span class="io-item-val">' + fmtSats(inp.prevout.value_sats) + '</span>';
-    html += '</div>';
-    html += '<div class="io-item-addr">' + fmtAddr(inp.address, inp.script_type) + '</div>';
-    html += '<div class="io-item-meta">';
-    html += scriptBadge(inp.script_type);
-    const seq = inp.sequence;
-    if (seq < 0xFFFFFFFE) html += '<span class="badge badge-red">RBF seq: 0x' + seq.toString(16) + '</span>';
-    if (inp.relative_timelock && inp.relative_timelock.enabled) {
-      html += '<span class="badge badge-amber" data-tip="BIP68 relative timelock">⏳ ' + inp.relative_timelock.value + ' ' + inp.relative_timelock.type + '</span>';
+    h += '<div class="io-item">';
+    h += '<div class="io-item-top"><span class="io-num">Input #' + i + '</span><span class="io-val">' + fmtSats(inp.prevout.value_sats) + '</span></div>';
+    h += '<div class="io-addr">' + fmtAddr(inp.address, inp.script_type) + '</div>';
+    h += '<div class="io-meta">' + scriptBadge(inp.script_type);
+    if (inp.sequence < 0xFFFFFFFE) h += ' <span class="badge b-red" data-tip="Sequence below 0xFFFFFFFE signals RBF">seq:' + '0x' + inp.sequence.toString(16) + '</span>';
+    if (inp.relative_timelock && inp.relative_timelock.enabled) h += ' <span class="badge b-amber" data-tip="BIP68 relative timelock: ' + inp.relative_timelock.value + ' ' + inp.relative_timelock.type + '">⏳ ' + inp.relative_timelock.value + ' ' + inp.relative_timelock.type + '</span>';
+    if (inp.witness && inp.witness.some(w => w !== '')) {
+      const uid = 'w' + i;
+      h += ' <button class="wit-toggle" onclick="document.getElementById(\'' + uid + '\').classList.toggle(\'open\')">witness (' + inp.witness.length + ')</button>';
+      h += '<div id="' + uid + '" class="wit-data">';
+      inp.witness.forEach((w, wi) => { h += '<div class="wit-idx">[' + wi + ']</div><div style="margin-bottom:6px">' + (w || '<em>empty</em>') + '</div>'; });
+      h += '</div>';
     }
-    if (inp.witness && inp.witness.length > 0) {
-      html += '<button class="witness-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">witness (' + inp.witness.length + ')</button>';
-      html += '<div class="witness-data">';
-      inp.witness.forEach((w, wi) => {
-        html += '<div style="color:var(--text3)">[' + wi + ']</div>';
-        html += '<div style="word-break:break-all;margin-bottom:8px">' + (w || '<em>empty</em>') + '</div>';
-      });
-      html += '</div>';
-    }
-    html += '</div></div>';
+    h += '</div></div>';
   });
-  html += '</div></div>';
-
+  h += '</div>';
   // Outputs
-  html += '<div class="io-card" style="animation-delay:0.15s">';
-  html += '<div class="io-card-header">';
-  html += '<div class="io-card-title" style="color:var(--green)">↗ Outputs (' + d.vout.length + ')</div>';
-  html += '<div style="font-family:var(--data);font-size:11px;color:var(--text3)">' + d.total_output_sats.toLocaleString() + ' sats</div>';
-  html += '</div><div class="io-items">';
+  h += '<div class="io-card">';
+  h += '<div class="io-card-hd"><div class="io-card-title" style="color:var(--green)">↗ Outputs (' + d.vout.length + ')</div>';
+  h += '<div class="io-card-sub">' + d.total_output_sats.toLocaleString() + ' sats</div></div>';
   d.vout.forEach(out => {
     const isDust = out.value_sats < 546 && out.script_type !== 'op_return';
-    html += '<div class="io-item">';
-    html += '<div class="io-item-top">';
-    html += '<span class="io-item-num">Output #' + out.n + '</span>';
-    html += '<span class="io-item-val">' + fmtSats(out.value_sats) + '</span>';
-    html += '</div>';
-    if (out.address) html += '<div class="io-item-addr">' + fmtAddr(out.address, out.script_type) + '</div>';
-    if (out.op_return_data_utf8) html += '<div class="io-item-addr" style="color:var(--amber)">"' + out.op_return_data_utf8 + '"</div>';
-    html += '<div class="io-item-meta">';
-    html += scriptBadge(out.script_type);
-    if (isDust) html += '<span class="badge badge-red">⚠ DUST</span>';
-    if (out.op_return_protocol && out.op_return_protocol !== 'unknown') html += '<span class="badge badge-blue">' + out.op_return_protocol + '</span>';
-    html += '</div></div>';
+    h += '<div class="io-item">';
+    h += '<div class="io-item-top"><span class="io-num">Output #' + out.n + '</span><span class="io-val">' + fmtSats(out.value_sats) + '</span></div>';
+    if (out.address) h += '<div class="io-addr">' + fmtAddr(out.address, out.script_type) + '</div>';
+    if (out.op_return_data_utf8) h += '<div class="io-addr" style="color:var(--amber)">"' + out.op_return_data_utf8 + '"</div>';
+    h += '<div class="io-meta">' + scriptBadge(out.script_type);
+    if (isDust) h += ' <span class="badge b-red">⚠ DUST</span>';
+    if (out.op_return_protocol && out.op_return_protocol !== 'unknown') h += ' <span class="badge b-blue">' + out.op_return_protocol + '</span>';
+    h += '</div></div>';
   });
-  html += '</div></div>';
+  h += '</div>';
+  h += '</div>'; // io-grid
 
-  html += '</div>'; // io-grid
-
-  // 8. Warnings
-  html += '<div id="sec-risks">';
-  if (d.warnings && d.warnings.length > 0) {
-    html += '<div class="section-title" style="margin-bottom:16px">// Warnings & Flags</div>';
-    html += '<div class="warnings-list">';
+  /* 8 — Warnings */
+  h += '<div id="s-risk">';
+  if (d.warnings && d.warnings.length) {
+    h += '<div class="warn-list">';
+    const icons = {HIGH_FEE:'🔥',DUST_OUTPUT:'⚠️',RBF_SIGNALING:'🔄',UNKNOWN_OUTPUT_SCRIPT:'❓'};
     d.warnings.forEach(w => {
-      const icons = { HIGH_FEE:'🔥', DUST_OUTPUT:'⚠️', RBF_SIGNALING:'🔄', UNKNOWN_OUTPUT_SCRIPT:'❓' };
-      html += '<div class="warning-card">';
-      html += '<div class="warning-icon">' + (icons[w.code]||'⚠') + '</div>';
-      html += '<div><div class="warning-code">' + w.code + '</div>';
-      if (w.message) html += '<div class="warning-msg">' + w.message + '</div>';
-      html += '<div class="warning-explain">' + warnExplain(w.code) + '</div>';
-      html += '</div></div>';
+      h += '<div class="warn-card"><div class="warn-icon">' + (icons[w.code]||'⚠') + '</div>';
+      h += '<div><div class="warn-code">' + w.code + '</div>';
+      if (w.message) h += '<div class="warn-msg">' + w.message + '</div>';
+      h += '<div class="warn-why">' + warnExplain(w.code) + '</div></div></div>';
     });
-    html += '</div>';
+    h += '</div>';
   } else {
-    html += '<div style="padding:20px;background:var(--green-dim);border:1px solid rgba(0,229,160,0.2);border-radius:8px;font-family:var(--data);font-size:13px;color:var(--green)">';
-    html += '✓ No warnings — this transaction looks clean.';
-    html += '</div>';
+    h += '<div class="no-warn">✓ No warnings — transaction looks clean.</div>';
   }
-  html += '</div>';
+  h += '</div>';
 
-  // 9. Technical details (collapsed)
-  html += '<div class="tech-section" style="margin-top:28px">';
-  html += '<button class="tech-toggle" onclick="toggleTech(this)">';
-  html += '<span>⟨/⟩ Show Technical Details (hex, ASM, raw fields)</span>';
-  html += '<span class="tech-toggle-arrow">▼</span>';
-  html += '</button>';
-  html += '<div class="tech-body">';
-
-  html += '<table class="kv-table">';
-  html += kvRow('txid', d.txid);
-  if (d.wtxid) html += kvRow('wtxid', d.wtxid);
-  html += kvRow('version', d.version);
-  html += kvRow('locktime', d.locktime + ' [' + d.locktime_type + ']');
-  html += kvRow('size_bytes', d.size_bytes);
-  html += kvRow('weight', d.weight + ' WU');
-  html += kvRow('vbytes', d.vbytes + ' vB');
-  html += kvRow('fee_rate_sat_vb', d.fee_rate_sat_vb);
-  html += kvRow('rbf_signaling', d.rbf_signaling);
-  html += '</table>';
-
-  // Scripts
+  /* 9 — Tech details */
+  h += '<div class="tech">';
+  h += '<button class="tech-btn" onclick="toggleTech(this)"><span>⟨/⟩ Raw Technical Details (hex, ASM, all fields)</span><span class="tech-arr">▼</span></button>';
+  h += '<div class="tech-body">';
+  h += '<table class="kv">';
+  h += kvr('txid', d.txid); if (d.wtxid) h += kvr('wtxid', d.wtxid);
+  h += kvr('version', d.version); h += kvr('locktime', d.locktime + ' [' + d.locktime_type + ']');
+  h += kvr('size / weight / vbytes', d.size_bytes + 'B / ' + d.weight + ' WU / ' + d.vbytes + ' vB');
+  h += kvr('fee_rate_sat_vb', d.fee_rate_sat_vb); h += kvr('rbf_signaling', d.rbf_signaling);
+  h += '</table>';
   d.vin.forEach((inp, i) => {
     if (inp.script_sig_hex) {
-      html += '<div style="font-family:var(--data);font-size:10px;color:var(--text3);margin:12px 0 4px;letter-spacing:0.1em">INPUT #' + i + ' SCRIPTSIG</div>';
-      html += '<div class="hex-block">' + inp.script_sig_hex + '</div>';
-      if (inp.script_asm) html += '<div class="hex-block" style="color:var(--green)">' + inp.script_asm + '</div>';
+      h += '<div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin:10px 0 3px;letter-spacing:.1em">INPUT #' + i + ' SCRIPTSIG HEX</div>';
+      h += '<div class="hex-box">' + inp.script_sig_hex + '</div>';
+      if (inp.script_asm) h += '<div class="hex-box" style="color:var(--green)">' + inp.script_asm + '</div>';
     }
   });
   d.vout.forEach((out, i) => {
-    html += '<div style="font-family:var(--data);font-size:10px;color:var(--text3);margin:12px 0 4px;letter-spacing:0.1em">OUTPUT #' + i + ' SCRIPTPUBKEY</div>';
-    html += '<div class="hex-block">' + out.script_pubkey_hex + '</div>';
-    if (out.script_asm) html += '<div class="hex-block" style="color:var(--green)">' + out.script_asm + '</div>';
+    h += '<div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin:10px 0 3px;letter-spacing:.1em">OUTPUT #' + i + ' SCRIPTPUBKEY HEX</div>';
+    h += '<div class="hex-box">' + out.script_pubkey_hex + '</div>';
+    if (out.script_asm) h += '<div class="hex-box" style="color:var(--green)">' + out.script_asm + '</div>';
   });
+  h += '</div></div>';
 
-  html += '</div></div>'; // tech section
+  return h;
+}
 
-  rt.innerHTML = html;
+/* ══════════════════════════════════════════
+   RENDER BLOCK
+══════════════════════════════════════════ */
+function renderBlock(d) {
+  const hdr = d.block_header, st = d.block_stats, cb = d.coinbase;
+  let h = '';
+
+  // Plain English
+  h += '<div id="s-sum">';
+  h += '<div class="plain">';
+  h += 'This is <strong>Bitcoin block #' + cb.bip34_height + '</strong>. ';
+  h += 'It contains <strong>' + d.tx_count + ' transactions</strong>. ';
+  h += 'Miners collected <em>' + (st.total_fees_sats/1e8).toFixed(8) + ' BTC</em> in fees plus the block subsidy. ';
+  h += 'The block weighs <em>' + st.total_weight.toLocaleString() + ' weight units</em>. ';
+  h += 'Average fee rate: <em>' + st.avg_fee_rate_sat_vb + ' sat/vB</em>.';
+  h += '</div>';
+  h += '</div>';
+
+  // Stats
+  h += '<div class="stats">';
+  h += statCard('Transactions', d.tx_count, 'in this block');
+  h += statCard('Total Fees', fmtSatsPlain(st.total_fees_sats), (st.total_fees_sats/1e8).toFixed(8) + ' BTC');
+  h += statCard('Block Weight', st.total_weight.toLocaleString(), 'weight units');
+  h += statCard('Avg Fee Rate', st.avg_fee_rate_sat_vb, 'sat per vByte');
+  h += '</div>';
+
+  // Block header
+  h += '<div id="s-flow" class="block-hdr">';
+  h += '<div class="sec-title">// Block Header</div>';
+  h += '<div class="badges" style="margin-bottom:12px">';
+  h += '<span class="badge b-amber">Block #' + cb.bip34_height + '</span>';
+  h += '<span class="badge ' + (hdr.merkle_root_valid ? 'b-green' : 'b-red') + '">' + (hdr.merkle_root_valid ? '✓ Merkle Valid' : '✗ Merkle INVALID') + '</span>';
+  h += '<span class="badge b-gray">' + d.tx_count + ' txs</span>';
+  h += '</div>';
+  h += '<div class="txid-lbl">Block Hash</div>';
+  h += '<div class="block-hash-val"><em>' + hdr.block_hash.slice(0,16) + '</em>' + hdr.block_hash.slice(16) + '</div>';
+  h += '<table class="kv">';
+  h += kvr('Timestamp', new Date(hdr.timestamp*1000).toUTCString());
+  h += kvr('Version', hdr.version);
+  h += kvr('Bits', hdr.bits);
+  h += kvr('Nonce', hdr.nonce);
+  h += kvr('Merkle Root', hdr.merkle_root);
+  h += kvr('Prev Block', hdr.prev_block_hash);
+  h += '</table></div>';
+
+  // Script type distribution
+  if (st.script_type_summary) {
+    h += '<div id="s-cost" class="card" style="margin-bottom:18px">';
+    h += '<div class="card-label">Output Script Type Distribution</div>';
+    const types = Object.entries(st.script_type_summary).sort((a,b)=>b[1]-a[1]);
+    const maxV = types[0][1];
+    const cols = {p2wpkh:'var(--green)',p2tr:'var(--amber)',p2pkh:'var(--blue)',p2sh:'var(--purple)',p2wsh:'var(--gdim)',op_return:'var(--text3)',unknown:'var(--red)'};
+    h += '<div class="dist-bar">';
+    types.forEach(([t, cnt]) => {
+      const pct = (cnt/maxV*100).toFixed(1);
+      h += '<div class="dist-row">';
+      h += '<div class="dist-row-name">' + scriptBadge(t) + '</div>';
+      h += '<div class="dist-track"><div class="dist-fill" style="width:' + pct + '%;background:' + (cols[t]||'var(--text2)') + '"></div></div>';
+      h += '<div class="dist-cnt">' + cnt.toLocaleString() + '</div>';
+      h += '</div>';
+    });
+    h += '</div></div>';
+  }
+
+  // Coinbase
+  h += '<div id="s-risk" class="card" style="margin-bottom:18px">';
+  h += '<div class="card-label">Coinbase Transaction</div>';
+  h += '<table class="kv">';
+  h += kvr('Block Height (BIP34)', cb.bip34_height);
+  h += kvr('Block Reward + Fees', fmtSatsPlain(cb.total_output_sats) + ' (' + (cb.total_output_sats/1e8).toFixed(8) + ' BTC)');
+  h += kvr('Coinbase Script Hex', '<span style="font-family:var(--mono);font-size:10px;word-break:break-all">' + cb.coinbase_script_hex.slice(0,80) + (cb.coinbase_script_hex.length>80?'…':'') + '</span>');
+  h += '</table></div>';
+
+  // Transaction list
+  const txs = d.transactions || [];
+  h += '<div class="sec-title" style="margin-bottom:10px">// Transactions (' + txs.length + ')</div>';
+  h += '<div class="tx-list">';
+  txs.forEach((tx, i) => {
+    h += '<div class="tx-row">';
+    h += '<div class="tx-row-hd" onclick="toggleTxRow(this)">';
+    h += '<span class="tx-row-idx">#' + i + '</span>';
+    h += '<span class="tx-row-id">' + tx.txid + '</span>';
+    h += (i===0 ? scriptBadge('coinbase') : '');
+    h += '<span class="tx-row-fee">' + tx.fee_sats.toLocaleString() + ' sats</span>';
+    h += '<span class="tx-row-arr">▼</span>';
+    h += '</div>';
+    h += '<div class="tx-row-body">';
+    h += '<table class="kv">';
+    h += kvr('txid', tx.txid);
+    h += kvr('fee', tx.fee_sats + ' sats (' + tx.fee_rate_sat_vb + ' sat/vB)');
+    h += kvr('size / weight / vbytes', tx.size_bytes + 'B / ' + tx.weight + 'WU / ' + tx.vbytes + 'vB');
+    h += kvr('inputs', tx.vin ? tx.vin.length : '?');
+    h += kvr('outputs', tx.vout ? tx.vout.length : '?');
+    h += '</table>';
+    h += '</div></div>';
+  });
+  h += '</div>';
+
+  return h;
+}
+
+/* ── Helpers ── */
+function buildStory(d) {
+  let s = 'This is a <strong>' + (d.segwit?'SegWit':'legacy') + ' Bitcoin transaction</strong> ';
+  s += 'spending <strong>' + d.vin.length + ' input' + (d.vin.length>1?'s':'') + '</strong> ';
+  s += 'and creating <strong>' + d.vout.length + ' output' + (d.vout.length>1?'s':'') + '</strong>. ';
+  s += '<em>' + d.total_input_sats.toLocaleString() + ' sats</em> came in, ';
+  s += '<em>' + d.total_output_sats.toLocaleString() + ' sats</em> went to outputs, ';
+  s += 'and <em>' + d.fee_sats.toLocaleString() + ' sats</em> were paid as a miner fee ';
+  s += '(≈' + d.fee_rate_sat_vb + ' sat/vB). ';
+  if (d.rbf_signaling) s += '<strong>⚠ RBF enabled</strong> — this tx can be replaced before confirming. ';
+  if (d.locktime > 0)  s += 'It has an <strong>absolute timelock</strong> of ' + d.locktime + ' (' + d.locktime_type + '). ';
+  return s;
 }
 
 function statCard(label, val, sub) {
-  return '<div class="stat-card"><div class="stat-label">' + label + '</div><div class="stat-value">' + val + '</div><div class="stat-sub">' + sub + '</div></div>';
+  return '<div class="stat"><div class="stat-lbl">' + label + '</div><div class="stat-val">' + val + '</div><div class="stat-sub">' + sub + '</div></div>';
 }
 
-function kvRow(k, v) {
-  return '<tr><td>' + k + '</td><td>' + v + '</td></tr>';
+function fmtSatsPlain(n) {
+  if (!n) return '0';
+  if (n >= 1e8) return (n/1e8).toFixed(8) + ' BTC';
+  return n.toLocaleString() + ' sats';
 }
+
+function kvr(k, v) { return '<tr><td>' + k + '</td><td>' + v + '</td></tr>'; }
 
 function toggleTech(btn) {
   btn.classList.toggle('open');
   btn.nextElementSibling.classList.toggle('open');
 }
 
-// ── Render block ──────────────────────────────────────────────────────────────
-function renderBlock(d) {
-  const rt = document.getElementById('renderTarget');
-  const h  = d.block_header;
-  const st = d.block_stats;
-  const cb = d.coinbase;
-
-  let html = '';
-
-  // Plain English
-  html += '<div class="plain-english">';
-  html += 'This is <strong>Bitcoin block #' + cb.bip34_height + '</strong>. ';
-  html += 'It contains <strong>' + d.tx_count + ' transactions</strong> ';
-  html += 'and miners earned <em>' + (st.total_fees_sats/1e8).toFixed(8) + ' BTC</em> in fees ';
-  html += 'plus the block reward. The total block weight is <em>' + st.total_weight.toLocaleString() + ' WU</em>.';
-  html += '</div>';
-
-  // Block header
-  html += '<div class="block-header-card">';
-  html += '<div class="section-title">// Block Header</div>';
-  html += '<div class="block-hash"><span>' + h.block_hash.slice(0,16) + '</span>' + h.block_hash.slice(16) + '</div>';
-  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">';
-  html += '<span class="badge badge-amber">Block #' + cb.bip34_height + '</span>';
-  html += '<span class="badge ' + (h.merkle_root_valid ? 'badge-green' : 'badge-red') + '">';
-  html += (h.merkle_root_valid ? '✓ Merkle Valid' : '✗ Merkle INVALID') + '</span>';
-  html += '<span class="badge badge-gray">' + d.tx_count + ' txs</span>';
-  html += '</div>';
-  html += '<table class="kv-table">';
-  html += kvRow('Timestamp', new Date(h.timestamp * 1000).toISOString());
-  html += kvRow('Version', h.version);
-  html += kvRow('Bits', h.bits);
-  html += kvRow('Nonce', h.nonce);
-  html += kvRow('Prev Hash', h.prev_block_hash);
-  html += kvRow('Merkle Root', h.merkle_root);
-  html += '</table>';
-  html += '</div>';
-
-  // Stats
-  html += '<div class="summary-grid">';
-  html += statCard('Transactions', d.tx_count, 'in this block', '');
-  html += statCard('Total Fees', (st.total_fees_sats/1e8).toFixed(8) + ' BTC', st.total_fees_sats.toLocaleString() + ' sats', '');
-  html += statCard('Block Weight', st.total_weight.toLocaleString(), 'weight units', '');
-  html += statCard('Avg Fee Rate', st.avg_fee_rate_sat_vb, 'sat per vByte', '');
-  html += '</div>';
-
-  // Script type summary
-  if (st.script_type_summary) {
-    html += '<div class="panel" style="margin-bottom:20px">';
-    html += '<div class="panel-title">Output Script Type Distribution</div>';
-    const types = Object.entries(st.script_type_summary).sort((a,b) => b[1]-a[1]);
-    const maxVal = types[0][1];
-    types.forEach(([type, count]) => {
-      const pct = (count / maxVal * 100).toFixed(1);
-      html += '<div style="margin-bottom:10px">';
-      html += '<div style="display:flex;justify-content:space-between;margin-bottom:4px">';
-      html += '<span>' + scriptBadge(type) + '</span>';
-      html += '<span style="font-family:var(--mono);font-size:12px;color:var(--text2)">' + count.toLocaleString() + '</span>';
-      html += '</div>';
-      const colors = { p2wpkh:'var(--green)', p2tr:'var(--amber)', p2pkh:'var(--blue)', p2sh:'var(--purple)', p2wsh:'var(--green2)', op_return:'var(--text3)' };
-      const col = colors[type] || 'var(--text3)';
-      html += '<div style="height:4px;background:var(--bg3);border-radius:2px">';
-      html += '<div style="height:100%;width:' + pct + '%;background:' + col + ';border-radius:2px;transition:width 1s ease"></div>';
-      html += '</div></div>';
-    });
-    html += '</div>';
-  }
-
-  // Coinbase
-  html += '<div class="panel" style="margin-bottom:20px">';
-  html += '<div class="panel-title">Coinbase Transaction</div>';
-  html += '<table class="kv-table">';
-  html += kvRow('Block Height (BIP34)', cb.bip34_height);
-  html += kvRow('Block Reward + Fees', fmtSats(cb.total_output_sats));
-  html += kvRow('Coinbase Script', '<span style="font-family:var(--data);font-size:11px;word-break:break-all">' + cb.coinbase_script_hex + '</span>');
-  html += '</table></div>';
-
-  // Tx list
-  html += '<div class="section-title" style="margin-bottom:12px">// Transactions (' + d.tx_count + ')</div>';
-  html += '<div class="tx-list">';
-  const txs = d.transactions || [];
-  txs.forEach((tx, i) => {
-    html += '<div class="tx-row">';
-    html += '<div class="tx-row-head" onclick="toggleTxRow(this)">';
-    html += '<span style="font-family:var(--mono);font-size:11px;color:var(--text3)">#' + i + '</span>';
-    html += '<span class="tx-row-txid">' + tx.txid + '</span>';
-    html += '<span>' + scriptBadge(i===0?'coinbase':'') + '</span>';
-    html += '<span class="tx-row-fee">' + tx.fee_sats + ' sats</span>';
-    html += '<span style="color:var(--text3);font-size:12px">▼</span>';
-    html += '</div>';
-    html += '<div class="tx-row-body">';
-    html += '<table class="kv-table">';
-    html += kvRow('txid', tx.txid);
-    html += kvRow('fee', tx.fee_sats + ' sats (' + tx.fee_rate_sat_vb + ' sat/vB)');
-    html += kvRow('size', tx.size_bytes + ' B / ' + tx.weight + ' WU / ' + tx.vbytes + ' vB');
-    html += kvRow('inputs', tx.vin ? tx.vin.length : '?');
-    html += kvRow('outputs', tx.vout ? tx.vout.length : '?');
-    html += '</table>';
-    html += '</div></div>';
-  });
-  html += '</div>';
-
-  rt.innerHTML = html;
-}
-
-function toggleTxRow(head) {
-  head.nextElementSibling.classList.toggle('open');
-  const arrow = head.querySelector('span:last-child');
-  if (arrow) arrow.textContent = head.nextElementSibling.classList.contains('open') ? '▲' : '▼';
+function toggleTxRow(hd) {
+  const body = hd.nextElementSibling;
+  body.classList.toggle('open');
+  const arr = hd.querySelector('.tx-row-arr');
+  if (arr) arr.textContent = body.classList.contains('open') ? '▲' : '▼';
 }
 </script>
 </body>

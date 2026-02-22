@@ -83,56 +83,120 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get('Content-Length', 0))
             raw = self.rfile.read(length)
 
-            # Parse multipart form
             tmpdir = tempfile.mkdtemp()
             blk_path = rev_path = xor_path = None
+
             try:
                 import email
-                from email import policy as ep
-                # Build a fake email message to parse multipart
+
                 full = b'Content-Type: ' + ct.encode() + b'\r\n\r\n' + raw
                 msg = email.message_from_bytes(full)
+
                 for part in msg.walk():
                     cd = part.get('Content-Disposition', '')
-                    if not cd: continue
+                    if not cd:
+                        continue
+
                     fname = None
                     for p in cd.split(';'):
                         p = p.strip()
                         if p.startswith('filename='):
-                            fname = p.split('=',1)[1].strip('"\'')
-                    if not fname: continue
+                            fname = p.split('=', 1)[1].strip('"\'')
+                    if not fname:
+                        continue
+
                     data = part.get_payload(decode=True)
                     fpath = os.path.join(tmpdir, fname)
                     with open(fpath, 'wb') as f:
                         f.write(data)
+
                     n = fname.lower()
-                    if 'blk' in n:   blk_path = fpath
-                    elif 'rev' in n: rev_path = fpath
-                    elif 'xor' in n: xor_path = fpath
+                    if 'blk' in n:
+                        blk_path = fpath
+                    elif 'rev' in n:
+                        rev_path = fpath
+                    elif 'xor' in n:
+                        xor_path = fpath
 
                 if not all([blk_path, rev_path, xor_path]):
-                    self.send_json({'ok': False, 'error': {'code': 'MISSING_FILES', 'message': 'Need blk*.dat, rev*.dat, xor.dat'}}, 400)
+                    self.send_json({
+                        'ok': False,
+                        'error': {
+                            'code': 'MISSING_FILES',
+                            'message': 'Need blk*.dat, rev*.dat, xor.dat'
+                        }
+                    }, 400)
                     return
 
+                out_dir = os.path.join(REPO_DIR, 'out')
+                os.makedirs(out_dir, exist_ok=True)
+
+                # clean old outputs
+                for f in os.listdir(out_dir):
+                    if f.endswith('.json'):
+                        os.unlink(os.path.join(out_dir, f))
+
                 r = subprocess.run(
-                    ['python3', os.path.join(REPO_DIR, 'block_analyzer.py'), blk_path, rev_path, xor_path],
-                    capture_output=True, text=True, timeout=120, cwd=REPO_DIR
+                    ['python3', os.path.join(REPO_DIR, 'block_analyzer.py'),
+                    blk_path, rev_path, xor_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    cwd=REPO_DIR
                 )
-                if r.returncode == 0:
-                    self.send_json(json.loads(r.stdout))
-                else:
-                    self.send_json({'ok': False, 'error': {'code': 'BLOCK_ERROR', 'message': r.stderr or 'Block parse error'}}, 500)
+
+                if r.returncode != 0:
+                    self.send_json({
+                        'ok': False,
+                        'error': {
+                            'code': 'BLOCK_ERROR',
+                            'message': r.stderr or 'Block parse error'
+                        }
+                    }, 500)
+                    return
+
+                # ✅ READ GENERATED JSON
+                outputs = []
+                for fname in os.listdir(out_dir):
+                    if fname.endswith('.json'):
+                        with open(os.path.join(out_dir, fname)) as f:
+                            outputs.append(json.load(f))
+
+                if not outputs:
+                    self.send_json({
+                        'ok': False,
+                        'error': {
+                            'code': 'NO_OUTPUT',
+                            'message': 'Block analyzer produced no output'
+                        }
+                    }, 500)
+                    return
+
+                self.send_json(outputs[0])
+
             except subprocess.TimeoutExpired:
-                self.send_json({'ok': False, 'error': {'code': 'TIMEOUT', 'message': 'Block analysis timed out'}}, 504)
+                self.send_json({
+                    'ok': False,
+                    'error': {
+                        'code': 'TIMEOUT',
+                        'message': 'Block analysis timed out'
+                    }
+                }, 504)
+
             except Exception as e:
-                self.send_json({'ok': False, 'error': {'code': 'SERVER_ERROR', 'message': str(e)}}, 500)
+                self.send_json({
+                    'ok': False,
+                    'error': {
+                        'code': 'SERVER_ERROR',
+                        'message': str(e)
+                    }
+                }, 500)
+
             finally:
                 import shutil
-                try: shutil.rmtree(tmpdir)
-                except: pass
-            return
+                shutil.rmtree(tmpdir, ignore_errors=True)
 
-        self.send_json({'error': 'Not found'}, 404)
+            return
 
 
 def main():
