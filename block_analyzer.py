@@ -143,12 +143,26 @@ def parse_undo_block(data: bytes) -> list:
 
                 nsize, pos = read_core_varint(data, pos)
 
-                if nsize in (0, 1):
-                    script = data[pos:pos + 20]
+                if nsize == 0:
+                    # P2PKH: OP_DUP OP_HASH160 <20> OP_EQUALVERIFY OP_CHECKSIG
+                    hash160 = data[pos:pos + 20]
                     pos += 20
-                elif nsize in (2, 3, 4, 5):
-                    script = data[pos:pos + 32]
+                    script = b'\x76\xa9\x14' + hash160 + b'\x88\xac'
+                elif nsize == 1:
+                    # P2SH: OP_HASH160 <20> OP_EQUAL
+                    hash160 = data[pos:pos + 20]
+                    pos += 20
+                    script = b'\xa9\x14' + hash160 + b'\x87'
+                elif nsize == 2 or nsize == 3:
+                    # P2PK compressed (02/03 prefix)
+                    pubkey = bytes([nsize]) + data[pos:pos + 32]
                     pos += 32
+                    script = b'\x21' + pubkey + b'\xac'
+                elif nsize == 4 or nsize == 5:
+                    # P2PK uncompressed (04 prefix, need to decompress — store as-is)
+                    pubkey = bytes([nsize - 2]) + data[pos:pos + 32]
+                    pos += 32
+                    script = b'\x41' + pubkey + b'\xac'
                 else:
                     sl = max(0, nsize - 6)
                     script = data[pos:pos + sl]

@@ -261,12 +261,13 @@ def classify_input_script(script_sig: bytes, witness: list, prevout_script: byte
         # keypath: single 64-byte witness item (schnorr sig)
         if len(witness) == 1:
             return 'p2tr_keypath', _p2tr_addr(ps[2:34], mainnet)
-        # with annex
+        # with annex (annex starts with 0x50, and witness has exactly 2 items: sig + annex)
         if len(witness) >= 2:
             last = bytes.fromhex(witness[-1]) if witness[-1] else b''
             if last[:1] == b'\x50' and len(witness) == 2:
                 return 'p2tr_keypath', _p2tr_addr(ps[2:34], mainnet)
-        return 'p2tr_scriptpath', None
+        # scriptpath: address still derivable from prevout tweaked key
+        return 'p2tr_scriptpath', _p2tr_addr(ps[2:34], mainnet)
 
     # P2PKH prevout
     if (n == 25 and ps[0] == 0x76 and ps[1] == 0xa9 and
@@ -483,8 +484,8 @@ def decode_sequence_timelock(sequence: int) -> dict:
     value = sequence & 0xFFFF
     return {
         'enabled': True,
-        'type': '512s_intervals' if is_time else 'blocks',
-        'value': value,
+        'type': 'time' if is_time else 'blocks',
+        'value': value * 512 if is_time else value,
     }
 
 
@@ -501,12 +502,23 @@ def analyze(fixture_path: str) -> dict:
     raw_hex = fixture['raw_tx']
     prevouts_list = fixture.get('prevouts', [])
 
-    # Build lookup by (txid_lower, vout)
-    prevout_map = {(p['txid'].lower(), p['vout']): p for p in prevouts_list}
+    # Build lookup by (txid_lower, vout) — detect duplicates
+    prevout_map = {}
+    for p in prevouts_list:
+        key = (p['txid'].lower(), p['vout'])
+        if key in prevout_map:
+            raise ValueError(f"Duplicate prevout: {p['txid']}:{p['vout']}")
+        prevout_map[key] = p
 
     tx = parse_raw_tx(raw_hex)
     raw = tx['raw']
     is_segwit = tx['is_segwit']
+
+    # Validate all inputs have matching prevouts
+    for inp in tx['inputs']:
+        key = (inp['txid'].lower(), inp['vout'])
+        if key not in prevout_map:
+            raise ValueError(f"Missing prevout for input {inp['txid']}:{inp['vout']}")
 
     txid = _compute_txid(raw, is_segwit)
     wtxid = _sha256d(raw)[::-1].hex() if is_segwit else None
