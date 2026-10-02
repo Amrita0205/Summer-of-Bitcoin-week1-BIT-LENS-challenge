@@ -1,6 +1,10 @@
 [![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/BdrW_bK5)
 # Week 1 Challenge: Chain Lens
 
+## 🎥 Demo video
+
+▶️ **[Watch the Chain Lens demo](https://www.canva.com/design/DAHCIvzFvpI/BBw1l4wWOzZw7K0f5O4MKw/view)**: a walkthrough of a real transaction in the web visualizer.
+
 Build a CLI tool that turns a raw Bitcoin transaction into a precise, machine-checkable JSON report, and a web visualizer (built on top of the same logic) that explains the transaction to non-technical users with diagrams, annotations, and friendly language.
 
 This is a protocol-focused challenge: you are expected to lean on your understanding of Bitcoin transaction serialization and accounting to make your implementation robust beyond the small set of public examples.
